@@ -91,13 +91,27 @@ class HashcatJobRunner:
             cmd = f'{base_cmd} {hashcat_options} "{hash_file}" "{wordlist}" -o "{output_file}" {options}'
             shell = True
         else:
-            # For Linux/Mac, use tmux
+            # For Linux/Mac, try to use tmux if available
             session_name = f"hashcat_{job_id}"
             hashcat_cmd = f'{base_cmd} {hashcat_options} "{hash_file}" "{wordlist}" -o "{output_file}" {options}'
-            cmd_args = [
-                "tmux", "new-session", "-d", "-s", session_name, hashcat_cmd
-            ]
-            cmd = " ".join(cmd_args)
+            
+            # Check if tmux is installed
+            try:
+                tmux_check = subprocess.run(["which", "tmux"], capture_output=True, text=True)
+                tmux_available = tmux_check.returncode == 0
+            except:
+                tmux_available = False
+                
+            if tmux_available:
+                # Use tmux if available
+                cmd_args = [
+                    "tmux", "new-session", "-d", "-s", session_name, hashcat_cmd
+                ]
+                cmd = " ".join(cmd_args)
+            else:
+                # If tmux is not available, run directly with nohup (to keep running in background)
+                cmd = f'nohup {base_cmd} {hashcat_options} "{hash_file}" "{wordlist}" -o "{output_file}" {options} > /dev/null 2>&1 &'
+            
             shell = True
         
         # Update job status
@@ -128,16 +142,31 @@ class HashcatJobRunner:
                 
                 exit_code = process.returncode
             else:
-                # For Linux/Mac, execute the tmux command
+                # For Linux/Mac, execute the command (tmux or nohup)
                 process = subprocess.run(cmd, shell=shell)
                 exit_code = process.returncode
                 
-                # For tmux sessions, we need to extract output after completion
-                if os.path.exists(output_file):
-                    with open(output_file, "r") as f:
-                        existing_content = f.read()
+                # If using tmux, try to extract output from the session
+                if "tmux" in cmd and tmux_available:
+                    try:
+                        # Wait a moment for the session to be established
+                        time.sleep(2)
+                        
+                        # Capture output from tmux if possible
+                        tmux_output = subprocess.run(
+                            ["tmux", "capture-pane", "-p", "-t", session_name],
+                            capture_output=True, text=True
+                        )
+                        existing_content = tmux_output.stdout if tmux_output.returncode == 0 else ""
+                    except:
+                        existing_content = "Could not capture tmux session output"
                 else:
-                    existing_content = ""
+                    # For direct execution with nohup, check if output file exists
+                    if os.path.exists(output_file):
+                        with open(output_file, "r") as f:
+                            existing_content = f.read()
+                    else:
+                        existing_content = "Running in background with nohup - output will be saved directly to the output file"
                 
                 # Record the command that was run
                 with open(output_file, "w") as f:
@@ -247,8 +276,15 @@ class HashcatJobRunner:
         if platform.system().lower() != "windows":
             session_name = f"hashcat_{job_id}"
             try:
-                subprocess.run(["tmux", "kill-session", "-t", session_name], check=False)
+                # Try to check if tmux is available first
+                tmux_check = subprocess.run(["which", "tmux"], capture_output=True, text=True)
+                if tmux_check.returncode == 0:
+                    subprocess.run(["tmux", "kill-session", "-t", session_name], check=False)
+                else:
+                    # If tmux is not available, try to kill the process by searching for the job ID in the process list
+                    subprocess.run(f"pkill -f 'hashcat.*{job_id}'", shell=True, check=False)
             except:
-                pass
+                # Log the error but continue
+                print(f"Failed to kill session/process for job {job_id}")
         
         return True
