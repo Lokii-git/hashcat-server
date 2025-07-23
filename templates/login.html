@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hashcat Server - Login</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <link href="/static/css/styles.css" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            background-color: var(--background-primary);
+        }
+        .login-card {
+            background-color: var(--card-background);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--border-color);
+            box-shadow: 0 0 30px var(--shadow-color), 0 0 10px var(--glow-color);
+        }
+        /* Matrix-like animation effect */
+        .matrix-bg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            z-index: -1;
+        }
+        .matrix-column {
+            position: absolute;
+            top: -1000px;
+            color: rgba(16, 185, 129, 0.3); /* Green with low opacity */
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1.2rem;
+            line-height: 1;
+            white-space: nowrap;
+            transform: translateZ(0);
+        }
+        /* Theme toggle on login */
+        .theme-toggle-login {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            cursor: pointer;
+            padding: 0.5rem;
+            border-radius: 0.375rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background-color 0.2s ease;
+        }
+        .theme-toggle-login:hover {
+            background-color: var(--background-tertiary);
+        }
+        /* Logo animation */
+        .logo-pulse {
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% {
+                filter: drop-shadow(0 0 0px rgba(16, 185, 129, 0.8));
+            }
+            70% {
+                filter: drop-shadow(0 0 10px rgba(16, 185, 129, 0.5));
+            }
+            100% {
+                filter: drop-shadow(0 0 0px rgba(16, 185, 129, 0.8));
+            }
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center h-screen">
+    <!-- Matrix-like background animation -->
+    <div class="matrix-bg" id="matrix-bg"></div>
+    
+    <!-- Theme toggle -->
+    <div class="theme-toggle-login" id="theme-toggle">
+        <!-- Moon Icon for Light Mode -->
+        <svg id="moon-icon" class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+            <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path>
+        </svg>
+        <!-- Sun Icon for Dark Mode -->
+        <svg id="sun-icon" class="w-5 h-5 hidden" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+            <path fill-rule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clip-rule="evenodd"></path>
+        </svg>
+    </div>
+    
+    <div class="login-card w-full max-w-md p-8 rounded-lg">
+        <div class="text-center mb-8">
+            <div class="flex justify-center mb-4">
+                <svg class="w-16 h-16 text-green-400 logo-pulse" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                    <path fill-rule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                </svg>
+            </div>
+            <h1 class="text-3xl font-bold text-green-400">Hashcat Server</h1>
+            <p class="text-gray-400 mt-2">Secure Remote Password Cracking</p>
+        </div>
+
+        <div id="login-form" class="space-y-6">
+            <div class="relative">
+                <label class="block text-gray-300 mb-2" for="username">Username</label>
+                <div class="relative">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <svg class="w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                            <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"></path>
+                        </svg>
+                    </div>
+                    <input type="text" id="username" 
+                        class="w-full pl-10 px-4 py-2 rounded border focus:border-green-400 focus:outline-none"
+                        placeholder="Enter username">
+                </div>
+            </div>
+            
+            <div class="relative">
+                <label class="block text-gray-300 mb-2" for="password">Password</label>
+                <div class="relative">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <svg class="w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                            <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"></path>
+                        </svg>
+                    </div>
+                    <input type="password" id="password" 
+                        class="w-full pl-10 px-4 py-2 rounded border focus:border-green-400 focus:outline-none"
+                        placeholder="Enter password">
+                </div>
+            </div>
+            
+            <div id="error-message" class="hidden p-4 rounded-lg notification border-red-500 text-white">
+                <div class="flex items-center">
+                    <svg class="w-5 h-5 mr-2 text-red-400" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                    </svg>
+                    <span>Invalid username or password</span>
+                </div>
+            </div>
+            
+            <button id="login-button" 
+                class="w-full py-3 px-4 bg-green-600 hover:bg-green-700 rounded-lg text-white font-semibold transition-colors flex items-center justify-center">
+                <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                    <path fill-rule="evenodd" d="M3 3a1 1 0 011 1v12a1 1 0 11-2 0V4a1 1 0 011-1zm7.707 3.293a1 1 0 010 1.414L9.414 9H17a1 1 0 110 2H9.414l1.293 1.293a1 1 0 01-1.414 1.414l-3-3a1 1 0 010-1.414l3-3a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+                </svg>
+                Log In
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // Matrix background animation
+        document.addEventListener('DOMContentLoaded', function() {
+            const matrixBg = document.getElementById('matrix-bg');
+            const characters = 'abcdefghijklmnopqrstuvwxyz0123456789$+-*/=%"\'#&_(),.;:?!\\|{}<>[]^~';
+            const columns = Math.floor(window.innerWidth / 20);
+            
+            for (let i = 0; i < columns; i++) {
+                const column = document.createElement('div');
+                column.className = 'matrix-column';
+                column.style.left = (i * 20) + 'px';
+                
+                // Random starting position
+                column.style.top = Math.random() * -1000 + 'px';
+                
+                // Random speed
+                const speed = 1 + Math.random() * 3;
+                column.dataset.speed = speed;
+                
+                // Create column content (random characters)
+                let columnContent = '';
+                const length = 20 + Math.floor(Math.random() * 30);
+                for (let j = 0; j < length; j++) {
+                    columnContent += characters.charAt(Math.floor(Math.random() * characters.length)) + '<br>';
+                }
+                column.innerHTML = columnContent;
+                
+                matrixBg.appendChild(column);
+            }
+            
+            // Animate columns
+            function animateMatrix() {
+                const columns = document.querySelectorAll('.matrix-column');
+                columns.forEach(column => {
+                    let pos = parseFloat(column.style.top);
+                    let speed = parseFloat(column.dataset.speed);
+                    
+                    pos += speed;
+                    
+                    // Reset position when column reaches bottom
+                    if (pos > window.innerHeight) {
+                        pos = Math.random() * -1000;
+                        
+                        // Regenerate column content
+                        let columnContent = '';
+                        const length = 20 + Math.floor(Math.random() * 30);
+                        for (let j = 0; j < length; j++) {
+                            columnContent += characters.charAt(Math.floor(Math.random() * characters.length)) + '<br>';
+                        }
+                        column.innerHTML = columnContent;
+                    }
+                    
+                    column.style.top = pos + 'px';
+                });
+                
+                requestAnimationFrame(animateMatrix);
+            }
+            
+            animateMatrix();
+        });
+
+        // Theme toggle functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            const themeToggleBtn = document.getElementById('theme-toggle');
+            const moonIcon = document.getElementById('moon-icon');
+            const sunIcon = document.getElementById('sun-icon');
+            const htmlEl = document.documentElement;
+            
+            // Check for saved theme preference or use default
+            const savedTheme = localStorage.getItem('theme') || 'dark';
+            htmlEl.setAttribute('data-theme', savedTheme);
+            
+            // Update button icons based on current theme
+            if (savedTheme === 'light') {
+                moonIcon.classList.add('hidden');
+                sunIcon.classList.remove('hidden');
+            } else {
+                sunIcon.classList.add('hidden');
+                moonIcon.classList.remove('hidden');
+            }
+            
+            // Handle theme toggle click
+            themeToggleBtn.addEventListener('click', function() {
+                const currentTheme = htmlEl.getAttribute('data-theme');
+                const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+                
+                htmlEl.setAttribute('data-theme', newTheme);
+                localStorage.setItem('theme', newTheme);
+                
+                // Toggle visibility of icons
+                moonIcon.classList.toggle('hidden');
+                sunIcon.classList.toggle('hidden');
+            });
+        });
+
+        // Login functionality
+        document.getElementById('login-button').addEventListener('click', function() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            
+            // Set loading state
+            const loginButton = document.getElementById('login-button');
+            const originalContent = loginButton.innerHTML;
+            loginButton.innerHTML = `
+                <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Logging in...
+            `;
+            loginButton.disabled = true;
+            
+            // Hide previous error
+            document.getElementById('error-message').classList.add('hidden');
+            
+            // Set the credentials for Basic Auth
+            const credentials = btoa(`${username}:${password}`);
+            
+            // Make a test API call to verify credentials
+            fetch('/api/jobs', {
+                headers: {
+                    'Authorization': `Basic ${credentials}`
+                }
+            })
+            .then(response => {
+                if (response.ok) {
+                    // Show success animation
+                    loginButton.innerHTML = `
+                        <svg class="w-5 h-5 mr-2 text-white" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                        </svg>
+                        Success!
+                    `;
+                    
+                    // Store credentials in session storage
+                    sessionStorage.setItem('auth', credentials);
+                    
+                    // Redirect to the dashboard after a brief delay
+                    setTimeout(() => {
+                        window.location.href = '/';
+                    }, 500);
+                } else {
+                    // Show error message
+                    document.getElementById('error-message').classList.remove('hidden');
+                    
+                    // Reset button
+                    loginButton.innerHTML = originalContent;
+                    loginButton.disabled = false;
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                document.getElementById('error-message').classList.remove('hidden');
+                
+                // Reset button
+                loginButton.innerHTML = originalContent;
+                loginButton.disabled = false;
+            });
+        });
+
+        // Allow Enter key to submit the form
+        document.getElementById('password').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                document.getElementById('login-button').click();
+            }
+        });
+        
+        document.getElementById('username').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                document.getElementById('password').focus();
+            }
+        });
+        
+        // Focus username field on load
+        document.getElementById('username').focus();
+    </script>
+</body>
+</html>

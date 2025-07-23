@@ -1,0 +1,14 @@
+version: '3'
+
+services:
+  hashcat-server:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./uploads:/app/uploads
+      - ./outputs:/app/outputs
+    environment:
+      - HASHCAT_USERNAME=${HASHCAT_USERNAME:-admin}
+      - HASHCAT_PASSWORD=${HASHCAT_PASSWORD:-hashcat_secure_password123}
+    restart: unless-stopped

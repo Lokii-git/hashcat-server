@@ -1,0 +1,304 @@
+{% extends "layout.html" %}
+
+{% block title %}Jobs{% endblock %}
+
+{% block content %}
+<div class="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
+    <div class="flex items-center space-x-3">
+        <div class="h-12 w-12 rounded-lg bg-card-alt flex items-center justify-center text-primary">
+            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+            </svg>
+        </div>
+        <div>
+            <h1 class="text-2xl md:text-3xl font-bold">Hashcat Jobs</h1>
+            <p class="text-sm text-secondary-text mt-1">Manage and monitor password cracking jobs</p>
+        </div>
+    </div>
+    <div class="mt-4 md:mt-0">
+        <a href="/upload" class="btn btn-primary flex items-center">
+            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+            </svg>
+            New Job
+        </a>
+    </div>
+</div>
+
+<div class="content-card p-6 mb-6">
+    <div class="flex mb-4 gap-2 flex-wrap">
+        <button id="btn-all" class="btn btn-secondary">All Jobs</button>
+        <button id="btn-running" class="btn btn-secondary">Running</button>
+        <button id="btn-completed" class="btn btn-secondary">Completed</button>
+        <button id="btn-failed" class="btn btn-secondary">Failed</button>
+    </div>
+    
+    <div class="bg-card rounded-lg overflow-hidden border border-card-alt">
+        <table class="min-w-full divide-y divide-card-border">
+            <thead class="bg-card-alt">
+                <tr>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-secondary-text uppercase tracking-wider">ID</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-secondary-text uppercase tracking-wider">Hash Type</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-secondary-text uppercase tracking-wider">Status</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-secondary-text uppercase tracking-wider">Started</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-secondary-text uppercase tracking-wider">Completed</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-secondary-text uppercase tracking-wider">Progress</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-secondary-text uppercase tracking-wider">Actions</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-card-border" id="jobs-table">
+                <tr>
+                    <td colspan="7" class="px-6 py-4 text-center text-secondary-text">Loading jobs...</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    
+    <div class="mt-6 flex justify-between items-center">
+        <p class="text-sm text-secondary-text"><span id="job-count">0</span> job(s) found</p>
+        <button id="btn-refresh" class="btn btn-primary">
+            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+            </svg>
+            Refresh List
+        </button>
+    </div>
+</div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        // DOM elements
+        const jobsTable = document.getElementById('jobs-table');
+        const jobCountElem = document.getElementById('job-count');
+        const btnAll = document.getElementById('btn-all');
+        const btnRunning = document.getElementById('btn-running');
+        const btnCompleted = document.getElementById('btn-completed');
+        const btnFailed = document.getElementById('btn-failed');
+        const btnRefresh = document.getElementById('btn-refresh');
+        
+        // Current filter
+        let currentFilter = 'all';
+        
+        // Function to format the hash mode to a readable name
+        function formatHashMode(mode) {
+            const hashTypes = {
+                '0': 'MD5',
+                '100': 'SHA1',
+                '1000': 'NTLM',
+                '1800': 'SHA512crypt',
+                '3200': 'bcrypt',
+                '5600': 'NetNTLMv2'
+            };
+            
+            return hashTypes[mode] || `Mode ${mode}`;
+        }
+        
+        // Function to load and display jobs
+        async function loadJobs(filter = 'all') {
+            try {
+                const response = await fetch('/api/jobs', {
+                    headers: {
+                        'Authorization': `Basic ${sessionStorage.getItem('auth')}`
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    let jobs = data.jobs || [];
+                    
+                    // Apply filter
+                    if (filter === 'running') {
+                        jobs = jobs.filter(job => ['starting', 'running'].includes(job.status));
+                    } else if (filter === 'completed') {
+                        jobs = jobs.filter(job => job.status === 'completed');
+                    } else if (filter === 'failed') {
+                        jobs = jobs.filter(job => ['failed', 'error'].includes(job.status));
+                    }
+                    
+                    // Sort by started_at (newest first)
+                    jobs.sort((a, b) => new Date(b.started_at) - new Date(a.started_at));
+                    
+                    // Update job count
+                    jobCountElem.textContent = jobs.length;
+                    
+                    // Generate table rows
+                    if (jobs.length === 0) {
+                        jobsTable.innerHTML = `
+                            <tr>
+                                <td colspan="7" class="px-6 py-4 text-center text-gray-400">No jobs found</td>
+                            </tr>
+                        `;
+                    } else {
+                        jobsTable.innerHTML = jobs.map(job => {
+                            // Format dates
+                            const startedAt = new Date(job.started_at).toLocaleString();
+                            const completedAt = job.completed_at ? new Date(job.completed_at).toLocaleString() : '-';
+                            
+                            // Determine status color
+                            let statusColor = 'text-gray-400';
+                            if (job.status === 'completed') statusColor = 'text-green-400';
+                            if (['failed', 'error'].includes(job.status)) statusColor = 'text-red-400';
+                            if (['starting', 'running'].includes(job.status)) statusColor = 'text-blue-400';
+                            
+                            // Calculate progress
+                            let progressText = 'N/A';
+                            if (job.total_hashes && job.cracked_count !== undefined) {
+                                progressText = `${job.cracked_count} / ${job.total_hashes}`;
+                            }
+                            
+                            // Create table row
+                            return `
+                                <tr data-job-id="${job.id}" class="hover:bg-gray-600">
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm">
+                                        <span class="font-mono">${job.id.substring(0, 8)}...</span>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm">${formatHashMode(job.hash_mode)}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm ${statusColor} font-semibold">${job.status}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm">${startedAt}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm">${completedAt}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm">${progressText}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm space-x-2">
+                                        <a href="/job/${job.id}" class="text-green-400 hover:text-green-300">View</a>
+                                        <button class="text-red-400 hover:text-red-300 btn-delete" data-job-id="${job.id}">Delete</button>
+                                    </td>
+                                </tr>
+                            `;
+                        }).join('');
+                        
+                        // Add click handler for table rows
+                        document.querySelectorAll('#jobs-table tr[data-job-id]').forEach(row => {
+                            row.addEventListener('click', (e) => {
+                                if (!e.target.classList.contains('btn-delete')) {
+                                    const jobId = row.getAttribute('data-job-id');
+                                    window.location.href = `/job/${jobId}`;
+                                }
+                            });
+                        });
+                        
+                        // Add delete button handlers
+                        document.querySelectorAll('.btn-delete').forEach(btn => {
+                            btn.addEventListener('click', async (e) => {
+                                e.stopPropagation();
+                                const jobId = btn.getAttribute('data-job-id');
+                                if (confirm('Are you sure you want to delete this job?')) {
+                                    await deleteJob(jobId);
+                                }
+                            });
+                        });
+                    }
+                } else {
+                    jobsTable.innerHTML = `
+                        <tr>
+                            <td colspan="7" class="px-6 py-4 text-center text-red-400">
+                                Error loading jobs. Please try again.
+                            </td>
+                        </tr>
+                    `;
+                }
+            } catch (error) {
+                console.error('Error loading jobs:', error);
+                jobsTable.innerHTML = `
+                    <tr>
+                        <td colspan="7" class="px-6 py-4 text-center text-red-400">
+                            Error loading jobs. Please try again.
+                        </td>
+                    </tr>
+                `;
+            }
+        }
+        
+        // Function to delete a job
+        async function deleteJob(jobId) {
+            try {
+                const response = await fetch(`/api/jobs/${jobId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Basic ${sessionStorage.getItem('auth')}`
+                    }
+                });
+                
+                if (response.ok) {
+                    loadJobs(currentFilter);  // Reload jobs with current filter
+                } else {
+                    alert('Failed to delete job');
+                }
+            } catch (error) {
+                console.error('Error deleting job:', error);
+                alert('Error deleting job');
+            }
+        }
+        
+        // Add filter button handlers
+        btnAll.addEventListener('click', () => {
+            currentFilter = 'all';
+            loadJobs(currentFilter);
+            
+            // Update active button state
+            [btnAll, btnRunning, btnCompleted, btnFailed].forEach(btn => {
+                btn.classList.remove('bg-green-600');
+                btn.classList.add('bg-gray-700');
+            });
+            btnAll.classList.remove('bg-gray-700');
+            btnAll.classList.add('bg-green-600');
+        });
+        
+        btnRunning.addEventListener('click', () => {
+            currentFilter = 'running';
+            loadJobs(currentFilter);
+            
+            // Update active button state
+            [btnAll, btnRunning, btnCompleted, btnFailed].forEach(btn => {
+                btn.classList.remove('bg-green-600');
+                btn.classList.add('bg-gray-700');
+            });
+            btnRunning.classList.remove('bg-gray-700');
+            btnRunning.classList.add('bg-green-600');
+        });
+        
+        btnCompleted.addEventListener('click', () => {
+            currentFilter = 'completed';
+            loadJobs(currentFilter);
+            
+            // Update active button state
+            [btnAll, btnRunning, btnCompleted, btnFailed].forEach(btn => {
+                btn.classList.remove('bg-green-600');
+                btn.classList.add('bg-gray-700');
+            });
+            btnCompleted.classList.remove('bg-gray-700');
+            btnCompleted.classList.add('bg-green-600');
+        });
+        
+        btnFailed.addEventListener('click', () => {
+            currentFilter = 'failed';
+            loadJobs(currentFilter);
+            
+            // Update active button state
+            [btnAll, btnRunning, btnCompleted, btnFailed].forEach(btn => {
+                btn.classList.remove('bg-green-600');
+                btn.classList.add('bg-gray-700');
+            });
+            btnFailed.classList.remove('bg-gray-700');
+            btnFailed.classList.add('bg-green-600');
+        });
+        
+        btnRefresh.addEventListener('click', () => {
+            loadJobs(currentFilter);
+        });
+        
+        // Initial load of jobs
+        loadJobs();
+        
+        // Set "All" button as active by default
+        btnAll.classList.remove('bg-gray-700');
+        btnAll.classList.add('bg-green-600');
+        
+        // Auto-refresh jobs every 15 seconds
+        setInterval(() => {
+            loadJobs(currentFilter);
+        }, 15000);
+    });
+</script>
+{% endblock %}

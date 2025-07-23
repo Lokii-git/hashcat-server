@@ -1,0 +1,401 @@
+{% extends "layout.html" %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
+    <div class="flex items-center space-x-3">
+        <div class="h-12 w-12 rounded-lg bg-card-alt flex items-center justify-center text-primary">
+            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"></path>
+            </svg>
+        </div>
+        <div>
+            <h1 class="text-2xl md:text-3xl font-bold">Hashcat Server Dashboard</h1>
+            <p class="text-sm text-secondary-text mt-1">Monitor password cracking operations and server status</p>
+        </div>
+    </div>
+    
+    <div class="flex space-x-2 mt-4 md:mt-0">
+        <button id="refresh-dashboard" class="btn btn-icon" title="Refresh Dashboard">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+            </svg>
+        </button>
+        <a href="/upload" class="btn btn-primary flex items-center">
+            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+            </svg>
+            New Job
+        </a>
+    </div>
+</div>
+
+<div class="content-card p-6">
+    
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <!-- Active Jobs Card -->
+        <div class="stat-card">
+            <div class="flex items-start justify-between">
+                <div>
+                    <h3 class="text-secondary-text font-medium mb-1">Active Jobs</h3>
+                    <p class="text-3xl font-bold text-primary" id="active-jobs-count">0</p>
+                </div>
+                <div class="rounded-full p-2 bg-opacity-20 bg-primary">
+                    <svg class="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                    </svg>
+                </div>
+            </div>
+            <div class="mt-2 text-secondary-text text-sm">
+                <span class="text-primary flex items-center" id="active-jobs-trend">
+                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 11l5-5m0 0l5 5m-5-5v12"></path>
+                    </svg>
+                    Real-time processing
+                </span>
+            </div>
+        </div>
+        
+        <!-- Completed Jobs Card -->
+        <div class="stat-card">
+            <div class="flex items-start justify-between">
+                <div>
+                    <h3 class="text-secondary-text font-medium mb-1">Completed Jobs</h3>
+                    <p class="text-3xl font-bold text-success" id="completed-jobs-count">0</p>
+                </div>
+                <div class="rounded-full p-2 bg-opacity-20 bg-success">
+                    <svg class="w-6 h-6 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                    </svg>
+                </div>
+            </div>
+            <div class="mt-2 text-secondary-text text-sm">
+                <span class="text-success" id="completed-percentage">0% completion rate</span>
+            </div>
+        </div>
+        
+        <!-- Cracked Passwords Card -->
+        <div class="stat-card">
+            <div class="flex items-start justify-between">
+                <div>
+                    <h3 class="text-secondary-text font-medium mb-1">Cracked Passwords</h3>
+                    <p class="text-3xl font-bold text-warning" id="cracked-passwords-count">0</p>
+                </div>
+                <div class="rounded-full p-2 bg-opacity-20 bg-warning">
+                    <svg class="w-6 h-6 text-warning" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                    </svg>
+                </div>
+            </div>
+            <div class="mt-2 text-secondary-text text-sm">
+                <span class="text-warning" id="crack-efficiency">Calculating efficiency...</span>
+            </div>
+        </div>
+    </div>
+    
+    <div class="mb-6">
+        <div class="flex justify-between items-center mb-3">
+            <h2 class="text-xl font-bold">Recent Jobs</h2>
+            <a href="/jobs" class="text-accent hover:text-accent-hover text-sm transition-all flex items-center">
+                View All
+                <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                </svg>
+            </a>
+        </div>
+        
+        <div class="table-container">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Hash File</th>
+                        <th>Hash Type</th>
+                        <th>Status</th>
+                        <th>Started</th>
+                        <th>Progress</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="recent-jobs-table">
+                    <tr>
+                        <td colspan="7" class="text-center">
+                            <div class="flex justify-center items-center py-4">
+                                <div class="animate-spin h-8 w-8 text-accent">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Dashboard state for tracking changes
+    const dashboardState = {
+        activeJobs: 0,
+        completedJobs: 0,
+        crackedPasswords: 0,
+        totalJobs: 0,
+        totalHashes: 0,
+        lastRefresh: null,
+        isLoading: false
+    };
+    
+    // Function to load jobs and update the dashboard
+    function loadDashboard() {
+        // Prevent multiple simultaneous requests
+        if (dashboardState.isLoading) return;
+        dashboardState.isLoading = true;
+        
+        // Show refresh animation
+        const refreshBtn = document.getElementById('refresh-dashboard');
+        if (refreshBtn) {
+            refreshBtn.classList.add('animate-spin');
+        }
+        
+        fetch('/api/jobs', {
+            headers: {
+                'Authorization': `Basic ${sessionStorage.getItem('auth')}`
+            }
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`Server responded with ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            const jobs = data.jobs || [];
+            dashboardState.lastRefresh = new Date();
+            
+            // Calculate metrics
+            const activeJobs = jobs.filter(job => ['starting', 'running'].includes(job.status));
+            const completedJobs = jobs.filter(job => job.status === 'completed');
+            const failedJobs = jobs.filter(job => job.status === 'failed' || job.status === 'error');
+            
+            // Calculate total cracked passwords and hashes
+            let crackedPasswords = 0;
+            let totalHashes = 0;
+            jobs.forEach(job => {
+                crackedPasswords += (job.cracked_count || 0);
+                totalHashes += (job.total_hashes || 0);
+            });
+            
+            // Store current state
+            const prevState = {...dashboardState};
+            dashboardState.activeJobs = activeJobs.length;
+            dashboardState.completedJobs = completedJobs.length;
+            dashboardState.crackedPasswords = crackedPasswords;
+            dashboardState.totalJobs = jobs.length;
+            dashboardState.totalHashes = totalHashes;
+            
+            // Update metrics with animation if values changed
+            animateCounter('active-jobs-count', prevState.activeJobs, dashboardState.activeJobs);
+            animateCounter('completed-jobs-count', prevState.completedJobs, dashboardState.completedJobs);
+            animateCounter('cracked-passwords-count', prevState.crackedPasswords, dashboardState.crackedPasswords);
+            
+            // Update trends and percentages
+            const completionRate = dashboardState.totalJobs > 0 ? 
+                Math.round((dashboardState.completedJobs / dashboardState.totalJobs) * 100) : 0;
+            document.getElementById('completed-percentage').textContent = `${completionRate}% completion rate`;
+            
+            // Calculate crack efficiency
+            const crackEfficiency = totalHashes > 0 ? 
+                Math.round((crackedPasswords / totalHashes) * 100) : 0;
+            document.getElementById('crack-efficiency').textContent = 
+                `${crackEfficiency}% success rate (${crackedPasswords} of ${totalHashes})`;
+            
+            // Sort jobs by started_at (newest first)
+            jobs.sort((a, b) => new Date(b.started_at) - new Date(a.started_at));
+            
+            // Get recent jobs (up to 5)
+            const recentJobs = jobs.slice(0, 5);
+            
+            // Generate table rows
+            const tableBody = document.getElementById('recent-jobs-table');
+            
+            if (recentJobs.length === 0) {
+                tableBody.innerHTML = `
+                    <tr>
+                        <td colspan="7" class="text-center py-4">
+                            <div class="flex flex-col items-center justify-center text-secondary-text">
+                                <svg class="w-12 h-12 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+                                </svg>
+                                <p>No jobs found</p>
+                                <a href="/upload" class="btn-accent-outline mt-2">Create your first job</a>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            } else {
+                tableBody.innerHTML = recentJobs.map(job => {
+                    // Format the date
+                    const startedAt = formatDate(job.started_at);
+                    
+                    // Get status styling
+                    const statusClass = HashcatUI.getStatusColorClass(job.status);
+                    
+                    // Calculate progress
+                    let progressHtml = '<span class="text-secondary-text">N/A</span>';
+                    
+                    if (job.total_hashes && job.cracked_count !== undefined) {
+                        const percent = Math.round((job.cracked_count / job.total_hashes) * 100);
+                        progressHtml = HashcatUI.progressBar(job.cracked_count, job.total_hashes, false);
+                    }
+                    
+                    // Format hash mode
+                    const hashType = job.hash_mode ? formatHashMode(job.hash_mode) : 'Unknown';
+                    
+                    // Create table row with hover effects
+                    return `
+                        <tr class="table-row-hover">
+                            <td>
+                                <span class="font-mono bg-card-alt py-1 px-2 rounded text-xs">${job.id.substring(0, 8)}</span>
+                            </td>
+                            <td class="max-w-[150px] truncate" title="${job.hash_file}">
+                                ${job.hash_file}
+                            </td>
+                            <td>${hashType}</td>
+                            <td>
+                                <span class="status-badge ${statusClass}">${job.status}</span>
+                            </td>
+                            <td>${startedAt}</td>
+                            <td>${progressHtml}</td>
+                            <td>
+                                <div class="flex space-x-1">
+                                    <a href="/job/${job.id}" class="btn-icon" title="View Job Details">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                                        </svg>
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+            }
+            
+            // Show notification if there are new jobs since last update
+            if (prevState.totalJobs > 0 && dashboardState.activeJobs > prevState.activeJobs) {
+                const newJobsCount = dashboardState.activeJobs - prevState.activeJobs;
+                HashcatUI.notify(`${newJobsCount} new job${newJobsCount > 1 ? 's' : ''} started`, 'info');
+            }
+            
+            // Show notification if jobs completed since last update
+            if (prevState.completedJobs < dashboardState.completedJobs) {
+                const newCompletedCount = dashboardState.completedJobs - prevState.completedJobs;
+                HashcatUI.notify(`${newCompletedCount} job${newCompletedCount > 1 ? 's' : ''} completed`, 'success');
+            }
+        })
+        .catch(error => {
+            console.error('Error loading jobs:', error);
+            
+            // Show error notification
+            HashcatUI.notify('Error loading dashboard data', 'error');
+            
+            // Show error message in the table
+            document.getElementById('recent-jobs-table').innerHTML = `
+                <tr>
+                    <td colspan="7" class="text-center py-6">
+                        <div class="flex flex-col items-center justify-center text-error">
+                            <svg class="w-12 h-12 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            <p>Error loading jobs</p>
+                            <button id="retry-load" class="btn-error-outline mt-3">
+                                Retry
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+            
+            // Add retry button functionality
+            document.getElementById('retry-load')?.addEventListener('click', loadDashboard);
+        })
+        .finally(() => {
+            // Reset loading state
+            dashboardState.isLoading = false;
+            
+            // Remove refresh animation
+            if (refreshBtn) {
+                refreshBtn.classList.remove('animate-spin');
+            }
+        });
+    }
+    
+    // Animate counter when values change
+    function animateCounter(elementId, startValue, endValue) {
+        const element = document.getElementById(elementId);
+        if (!element) return;
+        
+        // If values are the same, no need to animate
+        if (startValue === endValue) {
+            element.textContent = endValue;
+            return;
+        }
+        
+        // If counter is very large, don't animate
+        if (endValue > 1000) {
+            element.textContent = endValue;
+            return;
+        }
+        
+        // Add change indicator class
+        const isIncrease = endValue > startValue;
+        element.classList.add(isIncrease ? 'change-increase' : 'change-decrease');
+        
+        // Start animation
+        const duration = 1000; // 1 second
+        const stepTime = 50; // 50ms per step
+        const steps = duration / stepTime;
+        const increment = (endValue - startValue) / steps;
+        
+        let currentValue = startValue;
+        let currentStep = 0;
+        
+        const interval = setInterval(() => {
+            currentStep++;
+            currentValue += increment;
+            
+            if (currentStep >= steps) {
+                clearInterval(interval);
+                element.textContent = endValue;
+                
+                // Remove change indicator after animation
+                setTimeout(() => {
+                    element.classList.remove('change-increase', 'change-decrease');
+                }, 500);
+            } else {
+                element.textContent = Math.round(currentValue);
+            }
+        }, stepTime);
+    }
+    
+    // Initialize dashboard
+    document.addEventListener('DOMContentLoaded', () => {
+        // Initial load
+        loadDashboard();
+        
+        // Setup refresh button
+        document.getElementById('refresh-dashboard')?.addEventListener('click', () => {
+            loadDashboard();
+        });
+        
+        // Auto-refresh timer
+        setInterval(loadDashboard, HashcatUI.autoRefresh);
+    });
+</script>
+{% endblock %}

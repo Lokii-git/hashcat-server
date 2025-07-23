@@ -1,0 +1,521 @@
+{% extends "layout.html" %}
+
+{% block title %}Upload Files{% endblock %}
+
+{% block content %}
+<div class="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
+    <div class="flex items-center space-x-3">
+        <div class="h-12 w-12 rounded-lg bg-card-alt flex items-center justify-center text-primary">
+            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+            </svg>
+        </div>
+        <div>
+            <h1 class="text-2xl md:text-3xl font-bold">Upload Files</h1>
+            <p class="text-sm text-secondary-text mt-1">Upload hash files and wordlists for password cracking</p>
+        </div>
+    </div>
+    
+    <div class="mt-4 md:mt-0">
+        <a href="/jobs" class="btn btn-secondary flex items-center">
+            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+            </svg>
+            Back to Jobs
+        </a>
+    </div>
+</div>
+
+<div class="grid grid-cols-1 gap-6 mb-6">
+    <div class="content-card p-6">
+        <h2 class="text-xl font-bold mb-4 flex items-center">
+            <svg class="w-5 h-5 mr-2 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+            </svg>
+            Upload Files
+        </h2>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Hash File Upload -->
+            <div class="p-4 rounded-lg card-alt">
+                <h3 class="text-lg font-semibold mb-3 text-primary">Upload Hash File</h3>
+                <form id="hash-upload-form" class="space-y-4">
+                    <div class="border-dashed border-2 border-card-border rounded-lg p-6 text-center hover:border-primary transition-colors" id="hash-drop-area">
+                        <svg class="w-12 h-12 mx-auto text-secondary-text" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                        </svg>
+                        <p class="mt-2">Drag &amp; drop hash file here or</p>
+                        <input type="file" id="hash-file-input" class="hidden">
+                        <button type="button" id="hash-browse-button" class="btn btn-secondary mt-3">Browse Files</button>
+                    </div>
+                    
+                    <div class="hidden bg-card rounded-md p-3" id="hash-file-info">
+                        <div class="flex items-center">
+                            <svg class="w-5 h-5 mr-2 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                            </svg>
+                            <div>
+                                <p class="text-sm text-secondary-text">Selected file:</p>
+                                <p class="text-sm font-medium" id="hash-filename"></p>
+                            </div>
+                            <button type="button" id="hash-remove-file" class="ml-auto text-danger hover:text-danger-hover">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary w-full">
+                        <span class="flex items-center justify-center">
+                            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+                            </svg>
+                            Upload Hash File
+                        </span>
+                    </button>
+                </form>
+            </div>
+            
+            <!-- Wordlist Upload -->
+            <div class="p-4 rounded-lg card-alt">
+                <h3 class="text-lg font-semibold mb-3 text-success">Upload Wordlist</h3>
+                <form id="wordlist-upload-form" class="space-y-4">
+                    <div class="border-dashed border-2 border-card-border rounded-lg p-6 text-center hover:border-success transition-colors" id="wordlist-drop-area">
+                        <svg class="w-12 h-12 mx-auto text-secondary-text" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                        </svg>
+                        <p class="mt-2">Drag &amp; drop wordlist file here or</p>
+                        <input type="file" id="wordlist-file-input" class="hidden">
+                        <button type="button" id="wordlist-browse-button" class="btn btn-secondary mt-3">Browse Files</button>
+                    </div>
+                    
+                    <div class="hidden bg-card rounded-md p-3" id="wordlist-file-info">
+                        <div class="flex items-center">
+                            <svg class="w-5 h-5 mr-2 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                            </svg>
+                            <div>
+                                <p class="text-sm text-secondary-text">Selected file:</p>
+                                <p class="text-sm font-medium" id="wordlist-filename"></p>
+                            </div>
+                            <button type="button" id="wordlist-remove-file" class="ml-auto text-danger hover:text-danger-hover">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-success w-full">
+                        <span class="flex items-center justify-center">
+                            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+                            </svg>
+                            Upload Wordlist
+                        </span>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="content-card p-6">
+        <h2 class="text-xl font-bold mb-4 flex items-center">
+            <svg class="w-5 h-5 mr-2 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+            </svg>
+            Launch Hashcat Job
+        </h2>
+        
+        <form id="hashcat-form" class="space-y-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Hash Mode Selection -->
+                <div>
+                    <label class="form-label" for="hash-mode">Hash Mode</label>
+                    <select id="hash-mode" name="hash_mode" class="form-select">
+                        <option value="0">MD5</option>
+                        <option value="100">SHA1</option>
+                        <option value="1000">NTLM</option>
+                        <option value="1400">SHA256</option>
+                        <option value="1700">SHA512</option>
+                        <option value="1800">SHA512crypt $6$ (Unix)</option>
+                        <option value="2500">WPA/WPA2</option>
+                        <option value="3000">LM</option>
+                        <option value="3200">bcrypt $2*$ (Blowfish)</option>
+                        <option value="5500">NetNTLMv1</option>
+                        <option value="5600">NetNTLMv2</option>
+                        <option value="13100">Kerberos 5 TGS-REP</option>
+                        <option value="16800">WPA-PMKID-PBKDF2</option>
+                    </select>
+                    <p class="form-help">Select hash type or enter mode number</p>
+                </div>
+                
+                <!-- Attack Mode Selection -->
+                <div>
+                    <label class="form-label" for="attack-mode">Attack Mode</label>
+                    <select id="attack-mode" name="attack_mode" class="form-select">
+                        <option value="0">Straight (Dictionary Attack)</option>
+                        <option value="1">Combination</option>
+                        <option value="3">Brute Force</option>
+                        <option value="6">Hybrid Wordlist + Mask</option>
+                        <option value="7">Hybrid Mask + Wordlist</option>
+                        <option value="9">Association</option>
+                    </select>
+                    <p class="form-help">Select attack strategy</p>
+                </div>
+                
+                <!-- Hash File Selection -->
+                <div>
+                    <label class="form-label" for="hash-file-select">Hash File</label>
+                    <div class="form-select-wrapper">
+                        <select id="hash-file-select" name="hash_file" class="form-select">
+                            <option value="">-- Select uploaded hash file --</option>
+                        </select>
+                        <div class="form-select-icon">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                            </svg>
+                        </div>
+                    </div>
+                    <p class="form-help">Select previously uploaded hash file</p>
+                </div>
+                
+                <!-- Wordlist Selection -->
+                <div>
+                    <label class="form-label" for="wordlist-select">Wordlist</label>
+                    <div class="form-select-wrapper">
+                        <select id="wordlist-select" name="wordlist" class="form-select">
+                            <option value="">-- Select uploaded wordlist --</option>
+                        </select>
+                        <div class="form-select-icon">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                            </svg>
+                        </div>
+                    </div>
+                    <p class="form-help">Select previously uploaded wordlist file</p>
+                </div>
+                
+                <!-- Additional Options -->
+                <div class="md:col-span-2">
+                    <label class="form-label" for="options">Additional Options</label>
+                    <input type="text" id="options" name="options" class="form-input" placeholder="--force --gpu-temp-abort=100">
+                    <p class="form-help">Any additional hashcat options</p>
+                </div>
+            </div>
+            
+            <!-- Submit Button -->
+            <div class="flex justify-end">
+                <button type="submit" class="btn btn-primary flex items-center">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                    </svg>
+                    Launch Job
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Upload hash file functionality
+    document.addEventListener('DOMContentLoaded', () => {
+        // File upload setup for hash files
+        const hashFileInput = document.getElementById('hash-file-input');
+        const hashBrowseButton = document.getElementById('hash-browse-button');
+        const hashDropArea = document.getElementById('hash-drop-area');
+        const hashFileInfo = document.getElementById('hash-file-info');
+        const hashFilename = document.getElementById('hash-filename');
+        const hashUploadForm = document.getElementById('hash-upload-form');
+        
+        // File upload setup for wordlists
+        const wordlistFileInput = document.getElementById('wordlist-file-input');
+        const wordlistBrowseButton = document.getElementById('wordlist-browse-button');
+        const wordlistDropArea = document.getElementById('wordlist-drop-area');
+        const wordlistFileInfo = document.getElementById('wordlist-file-info');
+        const wordlistFilename = document.getElementById('wordlist-filename');
+        const wordlistUploadForm = document.getElementById('wordlist-upload-form');
+        
+        // Hashcat form
+        const hashcatForm = document.getElementById('hashcat-form');
+        const hashFileSelect = document.getElementById('hash-file-select');
+        const wordlistSelect = document.getElementById('wordlist-select');
+        
+        // Setup browse button for hash file
+        hashBrowseButton.addEventListener('click', () => {
+            hashFileInput.click();
+        });
+        
+        // Handle file selection for hash file
+        hashFileInput.addEventListener('change', () => {
+            if (hashFileInput.files.length > 0) {
+                hashFilename.textContent = hashFileInput.files[0].name;
+                hashFileInfo.classList.remove('hidden');
+            }
+        });
+        
+        // Setup drag and drop for hash file
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            hashDropArea.addEventListener(eventName, preventDefaults, false);
+        });
+        
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        
+        ['dragenter', 'dragover'].forEach(eventName => {
+            hashDropArea.addEventListener(eventName, highlight, false);
+        });
+        
+        ['dragleave', 'drop'].forEach(eventName => {
+            hashDropArea.addEventListener(eventName, unhighlight, false);
+        });
+        
+        function highlight() {
+            hashDropArea.classList.add('bg-gray-600');
+        }
+        
+        function unhighlight() {
+            hashDropArea.classList.remove('bg-gray-600');
+        }
+        
+        hashDropArea.addEventListener('drop', handleHashDrop, false);
+        
+        function handleHashDrop(e) {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            
+            if (files.length > 0) {
+                hashFileInput.files = files;
+                hashFilename.textContent = files[0].name;
+                hashFileInfo.classList.remove('hidden');
+            }
+        }
+        
+        // Setup browse button for wordlist
+        wordlistBrowseButton.addEventListener('click', () => {
+            wordlistFileInput.click();
+        });
+        
+        // Handle file selection for wordlist
+        wordlistFileInput.addEventListener('change', () => {
+            if (wordlistFileInput.files.length > 0) {
+                wordlistFilename.textContent = wordlistFileInput.files[0].name;
+                wordlistFileInfo.classList.remove('hidden');
+            }
+        });
+        
+        // Setup drag and drop for wordlist
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            wordlistDropArea.addEventListener(eventName, preventDefaults, false);
+        });
+        
+        ['dragenter', 'dragover'].forEach(eventName => {
+            wordlistDropArea.addEventListener(eventName, () => {
+                wordlistDropArea.classList.add('bg-gray-600');
+            }, false);
+        });
+        
+        ['dragleave', 'drop'].forEach(eventName => {
+            wordlistDropArea.addEventListener(eventName, () => {
+                wordlistDropArea.classList.remove('bg-gray-600');
+            }, false);
+        });
+        
+        wordlistDropArea.addEventListener('drop', (e) => {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            
+            if (files.length > 0) {
+                wordlistFileInput.files = files;
+                wordlistFilename.textContent = files[0].name;
+                wordlistFileInfo.classList.remove('hidden');
+            }
+        }, false);
+        
+        // Handle hash file upload
+        hashUploadForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            if (!hashFileInput.files || hashFileInput.files.length === 0) {
+                alert('Please select a hash file to upload');
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('hashlist', hashFileInput.files[0]);
+            
+            try {
+                const response = await fetch('/api/upload/hashlist', {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'Authorization': `Basic ${sessionStorage.getItem('auth')}`
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    alert(`Hash file uploaded successfully as ${data.filename}`);
+                    loadUploadedFiles();  // Refresh the lists
+                } else {
+                    alert('Failed to upload hash file');
+                }
+            } catch (error) {
+                console.error('Error uploading hash file:', error);
+                alert('Error uploading hash file');
+            }
+        });
+        
+        // Handle wordlist upload
+        wordlistUploadForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            if (!wordlistFileInput.files || wordlistFileInput.files.length === 0) {
+                alert('Please select a wordlist file to upload');
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('wordlist', wordlistFileInput.files[0]);
+            
+            try {
+                const response = await fetch('/api/upload/wordlist', {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'Authorization': `Basic ${sessionStorage.getItem('auth')}`
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    alert(`Wordlist uploaded successfully as ${data.filename}`);
+                    loadUploadedFiles();  // Refresh the lists
+                } else {
+                    alert('Failed to upload wordlist');
+                }
+            } catch (error) {
+                console.error('Error uploading wordlist:', error);
+                alert('Error uploading wordlist');
+            }
+        });
+        
+        // Load uploaded files for selection
+        async function loadUploadedFiles() {
+            try {
+                const response = await fetch('/api/files', {
+                    headers: {
+                        'Authorization': `Basic ${sessionStorage.getItem('auth')}`
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    const files = data.files || [];
+                    
+                    // Filter files by type
+                    const hashFiles = files.filter(file => file.type === 'hashlist').map(file => file.filename);
+                    const wordlists = files.filter(file => file.type === 'wordlist').map(file => file.filename);
+                    
+                    // Populate hash file select
+                    hashFileSelect.innerHTML = '<option value="">-- Select hash file --</option>';
+                    if (hashFiles.length === 0) {
+                        const option = document.createElement('option');
+                        option.value = "";
+                        option.textContent = "No hash files found";
+                        option.disabled = true;
+                        hashFileSelect.appendChild(option);
+                    } else {
+                        hashFiles.forEach(file => {
+                            if (file) {
+                                const option = document.createElement('option');
+                                option.value = file;
+                                option.textContent = file;
+                                hashFileSelect.appendChild(option);
+                            }
+                        });
+                    }
+                    
+                    // Populate wordlist select
+                    wordlistSelect.innerHTML = '<option value="">-- Select wordlist --</option>';
+                    if (wordlists.length === 0) {
+                        const option = document.createElement('option');
+                        option.value = "";
+                        option.textContent = "No wordlist files found";
+                        option.disabled = true;
+                        wordlistSelect.appendChild(option);
+                    } else {
+                        wordlists.forEach(list => {
+                            if (list) {
+                                const option = document.createElement('option');
+                                option.value = list;
+                                option.textContent = list;
+                                wordlistSelect.appendChild(option);
+                            }
+                        });
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading uploaded files:', error);
+            }
+        }
+        
+        // Handle hashcat job launch
+        hashcatForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const hashMode = document.getElementById('hash-mode').value;
+            const attackMode = document.getElementById('attack-mode').value;
+            const hashFile = hashFileSelect.value;
+            const wordlist = wordlistSelect.value;
+            const options = document.getElementById('options').value;
+            
+            if (!hashFile) {
+                alert('Please select a hash file');
+                return;
+            }
+            
+            if (!wordlist) {
+                alert('Please select a wordlist');
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('hash_mode', hashMode);
+            formData.append('attack_mode', attackMode);
+            formData.append('hash_file', hashFile);
+            formData.append('wordlist', wordlist);
+            formData.append('options', options);
+            
+            try {
+                const response = await fetch('/api/run/hashcat', {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'Authorization': `Basic ${sessionStorage.getItem('auth')}`
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    alert(`Hashcat job started with ID: ${data.job_id}`);
+                    window.location.href = `/job/${data.job_id}`;  // Redirect to job details page
+                } else {
+                    alert('Failed to start hashcat job');
+                }
+            } catch (error) {
+                console.error('Error starting hashcat job:', error);
+                alert('Error starting hashcat job');
+            }
+        });
+        
+        // Load uploaded files on page load
+        loadUploadedFiles();
+    });
+</script>
+{% endblock %}
