@@ -238,7 +238,7 @@
                         </svg>
                     </button>
                 </div>
-                <pre id="results-preview" class="font-mono text-xs p-4 overflow-x-auto max-h-96 scrollbar-thin">Loading output...</pre>
+                <pre id="results-preview" class="font-mono text-xs p-4 overflow-x-auto max-h-[500px] scrollbar-thin whitespace-pre-wrap">Loading output...</pre>
             </div>
             
             <div class="mt-4 flex justify-end">
@@ -303,6 +303,8 @@
             const statusMsgElement = document.getElementById('job-status-message');
             const completionText = document.getElementById('completion-text');
             const completionBanner = document.getElementById('completion-banner');
+            const statusIcon = document.getElementById('status-icon');
+            const statusIconBg = document.getElementById('status-icon-bg');
             
             // Normalize status names first for consistency
             let normalizedStatus = status;
@@ -313,19 +315,25 @@
                 displayStatus = 'Completed';
             }
             
-            // If running status, ensure auto-refresh is enabled
-            if (normalizedStatus === 'running' && !autoRefresh.checked) {
+            // If running or queued status, ensure auto-refresh is enabled
+            if ((normalizedStatus === 'running' || normalizedStatus === 'queued' || normalizedStatus === 'starting') && !autoRefresh.checked) {
                 autoRefresh.checked = true;
                 // Trigger the change event to start auto-refreshing
                 const event = new Event('change');
                 autoRefresh.dispatchEvent(event);
             }
             
-            // If completed, ensure we refresh once more to get final output
-            if ((normalizedStatus === 'completed' || normalizedStatus === 'failed' || normalizedStatus === 'error') && 
-                previousStatus === 'running') {
-                // Force one more refresh to get complete output
-                forceRefreshOutput();
+            // If completed, ensure we refresh to get final output
+            if (normalizedStatus === 'completed' || normalizedStatus === 'failed' || normalizedStatus === 'error') {
+                // If we're catching the transition from running to completed
+                if (previousStatus === 'running') {
+                    // Force one more refresh to get complete output
+                    forceRefreshOutput();
+                } else {
+                    // If we're loading the page with an already completed job,
+                    // make sure we fetch the output
+                    fetchOutput();
+                }
                 
                 // Disable auto-refresh if enabled
                 if (autoRefresh.checked) {
@@ -334,6 +342,12 @@
                     const event = new Event('change');
                     autoRefresh.dispatchEvent(event);
                 }
+                
+                // Make sure we fetch output one more time after a short delay
+                // to ensure we get the final results
+                setTimeout(() => {
+                    fetchOutput();
+                }, 2000);
             }
             
             // Update all status elements in sync
@@ -341,6 +355,17 @@
                 // Set appropriate colors and messages based on completion type
                 statusText.classList.add('text-green-400');
                 statusText.textContent = displayStatus;
+                
+                // Update status icon
+                if (statusIcon) {
+                    statusIcon.setAttribute('stroke', '#10B981'); // Green color
+                    statusIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>'; // Checkmark icon
+                }
+                
+                // Update status icon background
+                if (statusIconBg) {
+                    statusIconBg.style.backgroundColor = 'rgba(16, 185, 129, 0.2)'; // Light green background
+                }
                 
                 // Show completion banner
                 if (completionBanner) {
@@ -380,6 +405,17 @@
                 statusText.textContent = displayStatus;
                 if (completionText) completionText.textContent = 'Failed to complete';
                 
+                // Update status icon
+                if (statusIcon) {
+                    statusIcon.setAttribute('stroke', '#EF4444'); // Red color
+                    statusIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"></path>'; // X icon
+                }
+                
+                // Update status icon background
+                if (statusIconBg) {
+                    statusIconBg.style.backgroundColor = 'rgba(239, 68, 68, 0.2)'; // Light red background
+                }
+                
                 // Hide completion banner
                 if (completionBanner) {
                     completionBanner.classList.add('hidden');
@@ -391,6 +427,39 @@
                 statusText.textContent = displayStatus;
                 if (completionText) completionText.textContent = 'Not yet completed';
                 
+                // Update status icon - spinning clock for running
+                if (statusIcon) {
+                    statusIcon.setAttribute('stroke', '#3B82F6'); // Blue color
+                    statusIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>'; // Clock icon
+                }
+                
+                // Update status icon background
+                if (statusIconBg) {
+                    statusIconBg.style.backgroundColor = 'rgba(59, 130, 246, 0.2)'; // Light blue background
+                }
+                
+                // Hide completion banner
+                if (completionBanner) {
+                    completionBanner.classList.add('hidden');
+                }
+                
+            } else if (normalizedStatus === 'queued') {
+                statusText.classList.add('text-amber-400');
+                statusMsgElement.textContent = 'Job is queued and waiting for other jobs to complete';
+                statusText.textContent = 'Queued';
+                if (completionText) completionText.textContent = 'Waiting in queue';
+                
+                // Update status icon - queue icon
+                if (statusIcon) {
+                    statusIcon.setAttribute('stroke', '#F59E0B'); // Amber color
+                    statusIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"></path>'; // Queue icon
+                }
+                
+                // Update status icon background
+                if (statusIconBg) {
+                    statusIconBg.style.backgroundColor = 'rgba(245, 158, 11, 0.2)'; // Light amber background
+                }
+                
                 // Hide completion banner
                 if (completionBanner) {
                     completionBanner.classList.add('hidden');
@@ -401,6 +470,17 @@
                 statusMsgElement.textContent = 'Unknown status';
                 statusText.textContent = displayStatus;
                 if (completionText) completionText.textContent = 'Status unknown';
+                
+                // Update status icon - question mark for unknown
+                if (statusIcon) {
+                    statusIcon.setAttribute('stroke', '#9CA3AF'); // Gray color
+                    statusIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>'; // Question mark icon
+                }
+                
+                // Update status icon background
+                if (statusIconBg) {
+                    statusIconBg.style.backgroundColor = 'rgba(156, 163, 175, 0.2)'; // Light gray background
+                }
                 
                 // Hide completion banner
                 if (completionBanner) {
@@ -657,8 +737,23 @@
             progressText.textContent = `{{ job.cracked_count }} / {{ job.total_hashes }}`;
         }
         
+        // Enable auto-refresh for running or queued jobs
+        if ('{{ job.status }}' === 'running' || '{{ job.status }}' === 'starting' || '{{ job.status }}' === 'queued') {
+            autoRefresh.checked = true;
+            // Trigger the change event to start auto-refreshing
+            const event = new Event('change');
+            autoRefresh.dispatchEvent(event);
+        }
+        
         // Always fetch output regardless of status
-        fetchOutput();
+        // If job is completed, force a refresh to ensure we get the full output
+        if ('{{ job.status }}'.startsWith('completed') || 
+            '{{ job.status }}' === 'failed' || 
+            '{{ job.status }}' === 'error') {
+            forceRefreshOutput();
+        } else {
+            fetchOutput();
+        }
     });
 </script>
 {% endblock %}

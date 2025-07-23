@@ -9,6 +9,7 @@ A secure, web-based interface for running and managing hashcat password cracking
 
 - **Secure Web Interface**: Access hashcat from any device with a browser
 - **Authentication**: Protect your cracking server with username/password (improved login flow)
+- **User Management**: Admin panel with user creation and role-based access control
 - **Job Management**: Launch, monitor, and retrieve results from hashcat jobs
 - **File Upload**: Easily upload hash files and wordlists
 - **Security Features**: Automatic or manual hash file deletion after job completion
@@ -17,12 +18,18 @@ A secure, web-based interface for running and managing hashcat password cracking
 - **Organized Storage**: Separate directories for hashes, wordlists, and potfiles
 - **Linux Service Integration**: Run as a systemd service on Linux systems
 - **Reverse Proxy Support**: Easily deploy behind Nginx or Apache with HTTPS
+- **Admin Dashboard**: System overview, user management and global settings
+- **Role-Based Access Control**: Regular and admin user roles with appropriate permissions
 
 ## Requirements
 
 - Python 3.7+
 - Hashcat installed and accessible in PATH
 - For Linux/Mac: tmux installed (for background job management)
+- Additional packages for admin panel:
+  - SQLAlchemy (database ORM)
+  - Passlib[bcrypt] (password hashing)
+  - Psutil (system information for admin dashboard)
 
 ## Directory Structure
 
@@ -366,9 +373,49 @@ If you encounter permission issues after installation:
    sudo chmod -R 777 /opt/hashcat-server/{uploads,hashes,wordlists,outputs,logs}
    ```
 
+## Admin Panel
+
+The hashcat server now includes a comprehensive admin panel with the following features:
+
+### User Management
+- **Multiple User Support**: Create and manage multiple users with different permission levels
+- **Role-Based Access**: Admin and regular user roles with different privileges
+- **User Actions**: Admins can create, edit, disable, and delete users
+- **Password Management**: Secure password storage with bcrypt hashing
+
+### Admin Dashboard
+- **System Overview**: View server statistics, system information, and user metrics
+- **Job Management**: View and manage all users' hashcat jobs
+- **User Management**: Manage user accounts from a central interface
+
+### Settings Management
+- **General Settings**: Configure server name, job limits, and defaults
+- **Email Settings**: Set up email notifications for job completion
+- **Security Settings**: Configure login attempt limits and password policies
+
+### Security Enhancements
+- **Login Attempt Tracking**: Prevents brute force attacks with account lockout
+- **Password Policies**: Optional password expiration and complexity requirements
+- **Role-Based Authorization**: API endpoints and pages secured by user role
+
+### Accessing the Admin Panel
+1. Log in with an admin account
+2. Navigate to the admin dashboard at `/admin`
+3. Default admin credentials:
+   - Username: admin
+   - Password: hashcat-admin (change this immediately after first login)
+
 ## Version History
 
-### v1.2.0 (Current)
+### v1.3.0 (Current)
+- Added admin panel with user management and system settings
+- Implemented role-based access control with admin and regular user roles
+- Added database authentication with bcrypt password hashing
+- Added login attempt tracking and account lockout for security
+- Created settings management system with general, email, and security settings
+- Backward compatibility with existing user authentication
+
+### v1.2.0 
 - Improved job output monitoring with better completion detection
 - Added support for capturing final output when jobs complete
 - Added force refresh functionality to ensure complete job results
@@ -377,7 +424,7 @@ If you encounter permission issues after installation:
 - Better handling of exhausted keyspace detection
 - Added API endpoint to force refresh job output and status
 
-### v1.1.0 (Previous)
+### v1.1.0
 - Added hash file security features:
   - Option to automatically delete hash files after job completion
   - Manual deletion of hash files via UI and API

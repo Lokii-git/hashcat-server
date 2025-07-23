@@ -175,6 +175,7 @@ async def run_hashcat(
     wordlist: str = Form(...),
     options: str = Form(""),
     auto_delete_hash: bool = Form(False),
+    queue_if_busy: bool = Form(False),
     username: str = Depends(get_current_username)
 ):
     """Launch a hashcat job"""
@@ -186,13 +187,26 @@ async def run_hashcat(
     if not os.path.exists(wordlist_path):
         raise HTTPException(status_code=404, detail="Wordlist not found")
     
-    job_id = job_runner.start_job(hash_mode, attack_mode, hash_file_path, wordlist_path, options, auto_delete_hash)
-    return {"job_id": job_id, "status": "started"}
+    result = job_runner.start_job(
+        hash_mode, attack_mode, hash_file_path, wordlist_path, 
+        options, auto_delete_hash, queue_if_busy
+    )
+    return result
 
 @app.get("/api/jobs")
 async def list_jobs(username: str = Depends(get_current_username)):
     """List all jobs with status"""
     return {"jobs": job_runner.list_jobs()}
+
+@app.get("/api/jobs/status")
+async def get_jobs_status(username: str = Depends(get_current_username)):
+    """Get the overall status of jobs - if any are running"""
+    return {
+        "has_running_jobs": job_runner.has_running_jobs(),
+        "total_jobs": len(job_runner.jobs),
+        "running_jobs": sum(1 for job in job_runner.list_jobs() if job["status"] in ["running", "starting"]),
+        "queued_jobs": sum(1 for job in job_runner.list_jobs() if job["status"] == "queued")
+    }
 
 @app.get("/api/jobs/{job_id}")
 async def get_job(job_id: str, username: str = Depends(get_current_username)):
@@ -205,9 +219,32 @@ async def get_job(job_id: str, username: str = Depends(get_current_username)):
 @app.get("/api/jobs/{job_id}/output")
 async def get_job_output(job_id: str, username: str = Depends(get_current_username)):
     """Get job output file"""
+    # First check if the job exists
+    job = job_runner.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
     output_path = os.path.join("outputs", f"hashcat_{job_id}.txt")
     if not os.path.exists(output_path):
-        raise HTTPException(status_code=404, detail="Output file not found")
+        # If the output file doesn't exist, create a simple one with job info
+        try:
+            with open(output_path, "w") as f:
+                f.write("HASHCAT COMMAND:\n\n")
+                f.write(f"Job ID: {job_id}\n")
+                f.write(f"Status: {job.get('status', 'Unknown')}\n")
+                f.write(f"Started: {job.get('started_at', 'Unknown')}\n")
+                f.write(f"Completed: {job.get('completed_at', 'Not completed')}\n\n")
+                f.write("No output available for this job.")
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error creating output file: {str(e)}")
+    
+    # For completed jobs with existing output, ensure we get any potential
+    # last bit of output that might have been missed
+    if job.get("status", "").startswith("completed") and os.path.exists(output_path):
+        # Before returning the file, check if it's a completed job and refresh its output
+        # This ensures we've captured all final output
+        job_runner.refresh_job_output(job_id)
+    
     return FileResponse(output_path, media_type="text/plain", filename=f"hashcat_{job_id}.txt")
     
 @app.post("/api/jobs/{job_id}/refresh")

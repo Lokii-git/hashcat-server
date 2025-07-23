@@ -67,5 +67,10 @@ Desktop.ini
 *.tmp
 *~
 
-# Hashcat potfiles 
+# Hashcat potfiles and cache files
 potfiles/
+.cache/
+**/hashcat.*.kernel
+**/hashcat.*.log
+**/hashcat.dictstat*
+**/hashcat.restore*

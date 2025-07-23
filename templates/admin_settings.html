@@ -1,0 +1,353 @@
+{% extends "layout.html" %}
+
+{% block title %}Admin Settings{% endblock %}
+
+{% block content %}
+<div class="flex flex-col md:flex-row">
+    <!-- Admin Sidebar -->
+    <div class="w-full md:w-64 bg-card-alt p-4 rounded-lg mb-4 md:mb-0 md:mr-4">
+        <h2 class="text-xl font-bold mb-4 text-primary">Admin Panel</h2>
+        <nav class="space-y-2">
+            <a href="/admin" class="block px-4 py-2 rounded-md hover:bg-card transition-colors">
+                <div class="flex items-center">
+                    <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path>
+                    </svg>
+                    Dashboard
+                </div>
+            </a>
+            <a href="/admin/users" class="block px-4 py-2 rounded-md hover:bg-card transition-colors">
+                <div class="flex items-center">
+                    <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path>
+                    </svg>
+                    User Management
+                </div>
+            </a>
+            <a href="/admin/jobs" class="block px-4 py-2 rounded-md hover:bg-card transition-colors">
+                <div class="flex items-center">
+                    <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path>
+                    </svg>
+                    All Jobs
+                </div>
+            </a>
+            <a href="/admin/settings" class="block px-4 py-2 rounded-md bg-primary text-white hover:bg-primary-hover transition-colors">
+                <div class="flex items-center">
+                    <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                    </svg>
+                    Settings
+                </div>
+            </a>
+        </nav>
+    </div>
+
+    <!-- Main Content -->
+    <div class="flex-1">
+        <h1 class="text-2xl md:text-3xl font-bold mb-6">System Settings</h1>
+        
+        <div class="content-card p-6 mb-6">
+            <h3 class="text-xl font-bold mb-4">General Settings</h3>
+            
+            <form id="general-settings-form">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label for="site_name" class="form-label">Site Name</label>
+                        <input type="text" id="site_name" name="site_name" class="form-input" value="{{ settings.site_name }}" required>
+                    </div>
+                    
+                    <div>
+                        <label for="max_concurrent_jobs" class="form-label">Max Concurrent Jobs</label>
+                        <input type="number" id="max_concurrent_jobs" name="max_concurrent_jobs" class="form-input" value="{{ settings.max_concurrent_jobs }}" min="1" max="10" required>
+                    </div>
+                    
+                    <div>
+                        <label for="auto_delete_completed_jobs" class="form-label">Auto-delete Completed Jobs</label>
+                        <select id="auto_delete_completed_jobs" name="auto_delete_completed_jobs" class="form-select">
+                            <option value="never" {% if settings.auto_delete_completed_jobs == 'never' %}selected{% endif %}>Never</option>
+                            <option value="1_day" {% if settings.auto_delete_completed_jobs == '1_day' %}selected{% endif %}>After 1 Day</option>
+                            <option value="7_days" {% if settings.auto_delete_completed_jobs == '7_days' %}selected{% endif %}>After 7 Days</option>
+                            <option value="30_days" {% if settings.auto_delete_completed_jobs == '30_days' %}selected{% endif %}>After 30 Days</option>
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label for="default_hash_mode" class="form-label">Default Hash Mode</label>
+                        <select id="default_hash_mode" name="default_hash_mode" class="form-select">
+                            {% for mode_id, mode_name in hash_modes %}
+                            <option value="{{ mode_id }}" {% if settings.default_hash_mode == mode_id %}selected{% endif %}>{{ mode_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="mt-6">
+                    <button type="submit" class="btn btn-primary">Save Settings</button>
+                </div>
+            </form>
+        </div>
+        
+        <div class="content-card p-6 mb-6">
+            <h3 class="text-xl font-bold mb-4">Email Settings</h3>
+            
+            <form id="email-settings-form">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label for="email_enabled" class="form-checkbox-label">
+                            <input type="checkbox" id="email_enabled" name="email_enabled" class="form-checkbox" {% if settings.email_enabled %}checked{% endif %}>
+                            <span>Enable Email Notifications</span>
+                        </label>
+                    </div>
+                    
+                    <div class="md:col-span-2">
+                        <div id="email-settings-container" class="{% if not settings.email_enabled %}hidden{% endif %}">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div>
+                                    <label for="smtp_server" class="form-label">SMTP Server</label>
+                                    <input type="text" id="smtp_server" name="smtp_server" class="form-input" value="{{ settings.smtp_server }}">
+                                </div>
+                                
+                                <div>
+                                    <label for="smtp_port" class="form-label">SMTP Port</label>
+                                    <input type="number" id="smtp_port" name="smtp_port" class="form-input" value="{{ settings.smtp_port }}">
+                                </div>
+                                
+                                <div>
+                                    <label for="smtp_username" class="form-label">SMTP Username</label>
+                                    <input type="text" id="smtp_username" name="smtp_username" class="form-input" value="{{ settings.smtp_username }}">
+                                </div>
+                                
+                                <div>
+                                    <label for="smtp_password" class="form-label">SMTP Password</label>
+                                    <input type="password" id="smtp_password" name="smtp_password" class="form-input" value="{{ settings.smtp_password }}">
+                                </div>
+                                
+                                <div>
+                                    <label for="from_email" class="form-label">From Email</label>
+                                    <input type="email" id="from_email" name="from_email" class="form-input" value="{{ settings.from_email }}">
+                                </div>
+                                
+                                <div class="md:col-span-2">
+                                    <div class="form-checkbox-label">
+                                        <input type="checkbox" id="notify_on_job_completion" name="notify_on_job_completion" class="form-checkbox" {% if settings.notify_on_job_completion %}checked{% endif %}>
+                                        <span>Notify on job completion</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="mt-4">
+                                <button type="button" id="test-email-btn" class="btn btn-secondary">Send Test Email</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mt-6">
+                    <button type="submit" class="btn btn-primary">Save Email Settings</button>
+                </div>
+            </form>
+        </div>
+        
+        <div class="content-card p-6">
+            <h3 class="text-xl font-bold mb-4">Security Settings</h3>
+            
+            <form id="security-settings-form">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label for="max_login_attempts" class="form-label">Max Login Attempts</label>
+                        <input type="number" id="max_login_attempts" name="max_login_attempts" class="form-input" value="{{ settings.max_login_attempts }}" min="1" max="10">
+                    </div>
+                    
+                    <div>
+                        <label for="lockout_time" class="form-label">Lockout Time (minutes)</label>
+                        <input type="number" id="lockout_time" name="lockout_time" class="form-input" value="{{ settings.lockout_time }}" min="1" max="60">
+                    </div>
+                    
+                    <div class="md:col-span-2">
+                        <label for="require_password_change" class="form-checkbox-label">
+                            <input type="checkbox" id="require_password_change" name="require_password_change" class="form-checkbox" {% if settings.require_password_change %}checked{% endif %}>
+                            <span>Require password change every 90 days</span>
+                        </label>
+                    </div>
+                </div>
+                
+                <div class="mt-6">
+                    <button type="submit" class="btn btn-primary">Save Security Settings</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        // Toggle email settings visibility
+        const emailEnabled = document.getElementById('email_enabled');
+        const emailSettingsContainer = document.getElementById('email-settings-container');
+        
+        emailEnabled.addEventListener('change', () => {
+            if (emailEnabled.checked) {
+                emailSettingsContainer.classList.remove('hidden');
+            } else {
+                emailSettingsContainer.classList.add('hidden');
+            }
+        });
+        
+        // Handle general settings form submission
+        const generalSettingsForm = document.getElementById('general-settings-form');
+        generalSettingsForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            
+            const formData = new FormData(generalSettingsForm);
+            const data = {};
+            for (const [key, value] of formData.entries()) {
+                data[key] = value;
+            }
+            
+            fetch('/api/admin/settings/general', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to save settings');
+                }
+                return response.json();
+            })
+            .then(data => {
+                showNotification('Settings saved successfully');
+            })
+            .catch(error => {
+                showNotification('Error: ' + error.message, 'error');
+            });
+        });
+        
+        // Handle email settings form submission
+        const emailSettingsForm = document.getElementById('email-settings-form');
+        emailSettingsForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            
+            const formData = new FormData(emailSettingsForm);
+            const data = {
+                email_enabled: formData.get('email_enabled') === 'on',
+                notify_on_job_completion: formData.get('notify_on_job_completion') === 'on'
+            };
+            
+            if (data.email_enabled) {
+                data.smtp_server = formData.get('smtp_server');
+                data.smtp_port = parseInt(formData.get('smtp_port'));
+                data.smtp_username = formData.get('smtp_username');
+                data.smtp_password = formData.get('smtp_password');
+                data.from_email = formData.get('from_email');
+            }
+            
+            fetch('/api/admin/settings/email', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to save email settings');
+                }
+                return response.json();
+            })
+            .then(data => {
+                showNotification('Email settings saved successfully');
+            })
+            .catch(error => {
+                showNotification('Error: ' + error.message, 'error');
+            });
+        });
+        
+        // Handle security settings form submission
+        const securitySettingsForm = document.getElementById('security-settings-form');
+        securitySettingsForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            
+            const formData = new FormData(securitySettingsForm);
+            const data = {
+                max_login_attempts: parseInt(formData.get('max_login_attempts')),
+                lockout_time: parseInt(formData.get('lockout_time')),
+                require_password_change: formData.get('require_password_change') === 'on'
+            };
+            
+            fetch('/api/admin/settings/security', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to save security settings');
+                }
+                return response.json();
+            })
+            .then(data => {
+                showNotification('Security settings saved successfully');
+            })
+            .catch(error => {
+                showNotification('Error: ' + error.message, 'error');
+            });
+        });
+        
+        // Test email button
+        const testEmailBtn = document.getElementById('test-email-btn');
+        testEmailBtn.addEventListener('click', () => {
+            const data = {
+                smtp_server: document.getElementById('smtp_server').value,
+                smtp_port: parseInt(document.getElementById('smtp_port').value),
+                smtp_username: document.getElementById('smtp_username').value,
+                smtp_password: document.getElementById('smtp_password').value,
+                from_email: document.getElementById('from_email').value
+            };
+            
+            fetch('/api/admin/settings/test-email', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to send test email');
+                }
+                return response.json();
+            })
+            .then(data => {
+                showNotification('Test email sent successfully');
+            })
+            .catch(error => {
+                showNotification('Error: ' + error.message, 'error');
+            });
+        });
+        
+        // Function to show notification
+        function showNotification(message, type = 'success') {
+            const notification = document.createElement('div');
+            notification.className = `fixed top-4 right-4 p-4 rounded-lg shadow-lg ${type === 'success' ? 'bg-green-500' : 'bg-red-500'} text-white`;
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.classList.add('opacity-0', 'transition-opacity', 'duration-500');
+                setTimeout(() => {
+                    document.body.removeChild(notification);
+                }, 500);
+            }, 3000);
+        }
+    });
+</script>
+{% endblock %}

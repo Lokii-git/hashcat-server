@@ -187,7 +187,10 @@
             let crackedPasswords = 0;
             let totalHashes = 0;
             jobs.forEach(job => {
-                crackedPasswords += (job.cracked_count || 0);
+                // Only count cracked_count for jobs that actually have found passwords
+                if (job.status === 'completed_success') {
+                    crackedPasswords += (job.cracked_count || 0);
+                }
                 totalHashes += (job.total_hashes || 0);
             });
             
@@ -209,11 +212,16 @@
                 Math.round((dashboardState.completedJobs / dashboardState.totalJobs) * 100) : 0;
             document.getElementById('completed-percentage').textContent = `${completionRate}% completion rate`;
             
-            // Calculate crack efficiency
-            const crackEfficiency = totalHashes > 0 ? 
-                Math.round((crackedPasswords / totalHashes) * 100) : 0;
-            document.getElementById('crack-efficiency').textContent = 
-                `${crackEfficiency}% success rate (${crackedPasswords} of ${totalHashes})`;
+            // Calculate crack efficiency and display appropriate message
+            if (crackedPasswords > 0) {
+                const crackEfficiency = totalHashes > 0 ? 
+                    Math.min(100, Math.round((crackedPasswords / totalHashes) * 100)) : 0;
+                document.getElementById('crack-efficiency').textContent = 
+                    `${crackEfficiency}% success rate (${crackedPasswords} of ${totalHashes})`;
+            } else {
+                document.getElementById('crack-efficiency').textContent = 
+                    'No passwords cracked yet';
+            }
             
             // Sort jobs by started_at (newest first)
             jobs.sort((a, b) => new Date(b.started_at) - new Date(a.started_at));

@@ -29,39 +29,21 @@ class HashcatJobRunner:
                 print(f"WARNING: Permission denied creating directory: {dir_path}")
                 print(f"The application may not function correctly without write permissions.")
         
-        # Create hashcat cache directories
+        # Use current user's home directory for hashcat cache
         try:
-            # Create the hashcat home directory
-            hashcat_home = "/home/hashcat"
-            hashcat_cache = "/home/hashcat/.cache"
+            # Get current user's home directory
+            home_dir = os.path.expanduser('~')
+            hashcat_cache_dir = os.path.join(home_dir, '.cache', 'hashcat')
             
-            if not os.path.exists(hashcat_home):
+            if not os.path.exists(hashcat_cache_dir):
                 try:
-                    os.makedirs(hashcat_home, exist_ok=True)
-                    print(f"Created hashcat home directory: {hashcat_home}")
+                    os.makedirs(hashcat_cache_dir, exist_ok=True)
+                    print(f"Created hashcat cache directory: {hashcat_cache_dir}")
                 except PermissionError:
-                    print(f"WARNING: Permission denied creating directory: {hashcat_home}")
-                    print(f"Dictionary cache may not work correctly. Consider running with sudo or adjusting permissions.")
-            
-            # Create the hashcat cache directory
-            if not os.path.exists(hashcat_cache):
-                try:
-                    os.makedirs(hashcat_cache, exist_ok=True)
-                    print(f"Created hashcat cache directory: {hashcat_cache}")
-                except PermissionError:
-                    print(f"WARNING: Permission denied creating directory: {hashcat_cache}")
-                    print(f"Dictionary cache may not work correctly. Consider running with sudo or adjusting permissions.")
-            
-            # Ensure proper permissions on these directories
-            for directory in [hashcat_home, hashcat_cache]:
-                if os.path.exists(directory):
-                    try:
-                        # Try to set permissions to allow hashcat to write to these directories
-                        os.chmod(directory, 0o777)  # Permissive for testing, adjust for production
-                        print(f"Set permissions on {directory}")
-                    except Exception as e:
-                        print(f"Could not set permissions on {directory}: {str(e)}")
-        
+                    print(f"WARNING: Permission denied creating directory: {hashcat_cache_dir}")
+                    print(f"Dictionary cache may not work correctly. Consider running with appropriate permissions.")
+                except Exception as e:
+                    print(f"Error creating hashcat cache directory: {str(e)}")
         except Exception as e:
             print(f"Error setting up hashcat cache directories: {str(e)}")
             print("Dictionary cache may not work correctly.")
@@ -90,8 +72,16 @@ class HashcatJobRunner:
             print(f"Error: Permission denied writing to jobs file: {self.jobs_file}")
             print(f"Job status will not be persisted. Check file permissions.")
     
-    def start_job(self, hash_mode: str, attack_mode: str, hash_file: str, wordlist: str, options: str = "", auto_delete_hash: bool = False) -> str:
-        """Start a new hashcat job"""
+    def has_running_jobs(self) -> bool:
+        """Check if there are any running jobs"""
+        for job in self.jobs.values():
+            if job["status"] == "starting" or job["status"] == "running":
+                return True
+        return False
+        
+    def start_job(self, hash_mode: str, attack_mode: str, hash_file: str, wordlist: str, 
+                  options: str = "", auto_delete_hash: bool = False, queue_if_busy: bool = False) -> Dict[str, Any]:
+        """Start a new hashcat job or queue it if requested and another job is running"""
         job_id = str(uuid.uuid4())
         
         # Ensure we're using absolute paths
@@ -103,10 +93,13 @@ class HashcatJobRunner:
         hash_file_abs = os.path.abspath(hash_file)
         wordlist_abs = os.path.abspath(wordlist)
         
+        # Check if any jobs are currently running
+        jobs_running = self.has_running_jobs()
+        
         # Create job record
         job = {
             "id": job_id,
-            "status": "starting",
+            "status": "queued" if (jobs_running and queue_if_busy) else "starting",
             "hash_file": os.path.basename(hash_file),
             "hash_file_path": hash_file_abs,  # Store full path for easier reference
             "wordlist": os.path.basename(wordlist),
@@ -115,7 +108,8 @@ class HashcatJobRunner:
             "attack_mode": attack_mode,
             "options": options,
             "output_file": output_file,
-            "started_at": datetime.now().isoformat(),
+            "started_at": datetime.now().isoformat() if not (jobs_running and queue_if_busy) else None,
+            "queued_at": datetime.now().isoformat() if (jobs_running and queue_if_busy) else None,
             "completed_at": None,
             "cracked_count": 0,
             "total_hashes": 0,
@@ -126,14 +120,54 @@ class HashcatJobRunner:
         self.jobs[job_id] = job
         self._save_jobs()
         
+        # If we're not queueing or no jobs are running, start immediately
+        if not jobs_running or not queue_if_busy:
+            # Start job in a separate thread
+            threading.Thread(
+                target=self._run_job,
+                args=(job_id, hash_mode, attack_mode, hash_file, wordlist, options, output_file),
+                daemon=True
+            ).start()
+            return {"job_id": job_id, "status": "started"}
+        else:
+            # Job is queued for later execution
+            return {"job_id": job_id, "status": "queued"}
+            
+    def _check_queue(self) -> None:
+        """Check if there are any queued jobs that can be started"""
+        # If there are any running jobs, don't start new ones
+        if self.has_running_jobs():
+            return
+            
+        # Find the oldest queued job
+        queued_jobs = [job for job in self.jobs.values() if job["status"] == "queued"]
+        if not queued_jobs:
+            return
+            
+        # Sort by queued_at time
+        queued_jobs.sort(key=lambda j: j.get("queued_at") or "")
+        next_job = queued_jobs[0]
+        
+        # Update job status
+        job_id = next_job["id"]
+        hash_mode = next_job["hash_mode"]
+        attack_mode = next_job["attack_mode"]
+        hash_file = next_job["hash_file_path"]
+        wordlist = next_job["wordlist_path"]
+        options = next_job["options"]
+        output_file = next_job["output_file"]
+        
+        # Update job status
+        self.jobs[job_id]["status"] = "starting"
+        self.jobs[job_id]["started_at"] = datetime.now().isoformat()
+        self._save_jobs()
+        
         # Start job in a separate thread
         threading.Thread(
             target=self._run_job,
             args=(job_id, hash_mode, attack_mode, hash_file, wordlist, options, output_file),
             daemon=True
         ).start()
-        
-        return job_id
     
     def _run_job(self, job_id: str, hash_mode: str, attack_mode: str, hash_file: str, 
                  wordlist: str, options: str, output_file: str):
@@ -196,8 +230,10 @@ class HashcatJobRunner:
                 tmux_available = False
                 screen_available = False
             
-            # Set environment variables for hashcat cache
-            env_vars = "env HOME=/home/hashcat XDG_CACHE_HOME=/home/hashcat/.cache"
+            # Get current user's home directory for cache
+            home_dir = os.path.expanduser('~')
+            cache_dir = os.path.join(home_dir, '.cache')
+            env_vars = f"env XDG_CACHE_HOME={cache_dir}"
             
             # Choose execution method based on availability
             if tmux_available:
@@ -821,8 +857,20 @@ class HashcatJobRunner:
             # Check for actual cracked hashes in the output (they typically contain ":" character)
             if not status_cracked:  # Only do this if we didn't already find "Status: Cracked"
                 for line in content.split("\n"):
-                    if ":" in line and not line.startswith("#") and not line.startswith("Session") and not line.startswith("Status"):
-                        if line.strip().count(":") >= 1:  # Most hash:password outputs have at least 1 colon
+                    # More strict checking for cracked hashes
+                    # Lines with cracked passwords typically look like "hash:password"
+                    # We'll check for lines with at least one colon that aren't comments or headers
+                    if (":" in line and 
+                        not line.startswith("#") and 
+                        not line.startswith("Session") and 
+                        not line.startswith("Status") and
+                        not line.startswith("Recovered") and
+                        not "Progress" in line and
+                        not "Time" in line and
+                        not "Speed" in line):
+                            
+                        # Additional check to avoid counting system messages
+                        if line.strip().count(":") >= 1 and len(line.strip()) > 10:
                             cracked_found = True
                             cracked_count += 1
             
@@ -882,6 +930,9 @@ class HashcatJobRunner:
                         self._update_job_status(job_id, status, hash_file_deleted=True)
                     except Exception as e:
                         print(f"Failed to auto-delete hash file: {str(e)}")
+                        
+            # Check if there are any queued jobs that can now be started
+            threading.Thread(target=self._check_queue, daemon=True).start()
                         
         except Exception as e:
             print(f"Error processing job completion for {job_id}: {str(e)}")
@@ -1059,11 +1110,20 @@ class HashcatJobRunner:
                         f.write(new_output)
             except Exception as e:
                 print(f"Error updating output during refresh: {str(e)}")
-                
-        # Now process the completion to update status
+        
+        # For completed jobs, we still want to process the output to ensure status is correct
+        # This is important for jobs that were running and have completed
         if output_file and os.path.exists(output_file):
             try:
-                # Force update of job status and output
+                # For jobs that are already marked as completed, we'll still
+                # process the completion to ensure the status is accurate,
+                # but we won't overwrite the completed status
+                if job.get("status", "").startswith("completed") or job.get("status") == "failed" or job.get("status") == "error":
+                    # Just return True, we don't need to process completion again
+                    # but this counts as a successful refresh
+                    return True
+                
+                # Force update of job status and output for non-completed jobs
                 self._process_job_completion(job_id, output_file)
                 return True
             except Exception as e:

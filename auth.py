@@ -1,10 +1,14 @@
 import os
 import json
-import secrets
+from datetime import datetime
 from typing import Optional
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from dotenv import load_dotenv
+from sqlalchemy.orm import Session
+
+# Import models for database authentication
+from models import User, get_db_session
 
 # Load environment variables from .env file
 load_dotenv()
@@ -16,39 +20,82 @@ security = HTTPBasic()
 DEFAULT_USERNAME = os.getenv("HASHCAT_USERNAME", "admin")
 DEFAULT_PASSWORD = os.getenv("HASHCAT_PASSWORD", "password")
 
-def get_current_username(credentials: HTTPBasicCredentials = Depends(security)) -> str:
+def get_current_user(credentials: HTTPBasicCredentials = Depends(security)):
     """
-    Authenticate user using HTTP Basic Auth
+    Authenticate user using HTTP Basic Auth and return the User object
     """
-    # Check if we have a credentials file
-    if os.path.exists("credentials.json"):
-        with open("credentials.json", "r") as f:
-            creds = json.load(f)
-        correct_username = creds.get("username", DEFAULT_USERNAME)
-        correct_password = creds.get("password", DEFAULT_PASSWORD)
-    else:
-        # Use environment variables or defaults
-        correct_username = DEFAULT_USERNAME
-        correct_password = DEFAULT_PASSWORD
-    
-    # Create constant-time comparison function to avoid timing attacks
-    is_username_correct = secrets.compare_digest(credentials.username, correct_username)
-    is_password_correct = secrets.compare_digest(credentials.password, correct_password)
-    
-    if not (is_username_correct and is_password_correct):
+    db = get_db_session()
+    try:
+        # Try database authentication first
+        user = db.query(User).filter(User.username == credentials.username).first()
+        
+        if user and user.is_active and user.verify_password(credentials.password):
+            # Update last login time
+            user.last_login = datetime.utcnow()
+            db.commit()
+            return user
+            
+        # Fall back to legacy credential check if no user found or password incorrect
+        if not user:
+            if os.path.exists("credentials.json"):
+                with open("credentials.json", "r") as f:
+                    creds = json.load(f)
+                legacy_username = creds.get("username", DEFAULT_USERNAME)
+                legacy_password = creds.get("password", DEFAULT_PASSWORD)
+            else:
+                # Use environment variables or defaults
+                legacy_username = DEFAULT_USERNAME
+                legacy_password = DEFAULT_PASSWORD
+                
+            if credentials.username == legacy_username and credentials.password == legacy_password:
+                # Create user in database from legacy credentials
+                new_user = User(
+                    username=legacy_username,
+                    password_hash=User.get_password_hash(legacy_password),
+                    is_admin=True,  # Legacy user is admin
+                    is_active=True
+                )
+                db.add(new_user)
+                db.commit()
+                return new_user
+        
+        # Authentication failed
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Basic"},
         )
-    
-    return credentials.username
+    finally:
+        db.close()
+
+def get_current_username(credentials: HTTPBasicCredentials = Depends(security)) -> str:
+    """
+    Backwards compatibility function for existing code
+    """
+    user = get_current_user(credentials)
+    return user.username
+
+def get_admin_user(user = Depends(get_current_user)):
+    """
+    Check if the current user is an admin
+    """
+    if not user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions",
+        )
+    return user
 
 def initialize_credentials():
     """
-    Initialize credentials file if it doesn't exist
+    Initialize credentials file and database if they don't exist
     """
     try:
+        # Initialize the database
+        from models import init_db
+        init_db()
+        
+        # For backwards compatibility, still maintain credentials.json
         if not os.path.exists("credentials.json"):
             creds = {
                 "username": DEFAULT_USERNAME,
