@@ -14,15 +14,20 @@ class HashcatJobRunner:
     Class for managing hashcat jobs in a tmux/screen session
     """
     def __init__(self):
-        self.jobs_file = "jobs.json"
+        # Get the directory where the script is located
+        self.base_dir = os.path.dirname(os.path.abspath(__file__))
+        self.jobs_file = os.path.join(self.base_dir, "jobs.json")
         self.jobs: Dict[str, Dict[str, Any]] = {}
         self._load_jobs()
         
-        # Create necessary directories
-        os.makedirs("uploads", exist_ok=True)
-        os.makedirs("hashes", exist_ok=True)
-        os.makedirs("wordlists", exist_ok=True)
-        os.makedirs("outputs", exist_ok=True)
+        # Create necessary directories with absolute paths
+        for dir_name in ["uploads", "hashes", "wordlists", "outputs"]:
+            dir_path = os.path.join(self.base_dir, dir_name)
+            try:
+                os.makedirs(dir_path, exist_ok=True)
+            except PermissionError:
+                print(f"WARNING: Permission denied creating directory: {dir_path}")
+                print(f"The application may not function correctly without write permissions.")
     
     def _load_jobs(self):
         """Load jobs from file"""
@@ -31,26 +36,44 @@ class HashcatJobRunner:
                 with open(self.jobs_file, "r") as f:
                     self.jobs = json.load(f)
             except json.JSONDecodeError:
+                print(f"Warning: Error parsing jobs file. Using empty jobs list.")
+                self.jobs = {}
+            except PermissionError:
+                print(f"Warning: Permission denied reading jobs file: {self.jobs_file}")
                 self.jobs = {}
         else:
             self.jobs = {}
     
     def _save_jobs(self):
         """Save jobs to file"""
-        with open(self.jobs_file, "w") as f:
-            json.dump(self.jobs, f, indent=2)
+        try:
+            with open(self.jobs_file, "w") as f:
+                json.dump(self.jobs, f, indent=2)
+        except PermissionError:
+            print(f"Error: Permission denied writing to jobs file: {self.jobs_file}")
+            print(f"Job status will not be persisted. Check file permissions.")
     
     def start_job(self, hash_mode: str, attack_mode: str, hash_file: str, wordlist: str, options: str = "", auto_delete_hash: bool = False) -> str:
         """Start a new hashcat job"""
         job_id = str(uuid.uuid4())
-        output_file = os.path.join("outputs", f"hashcat_{job_id}.txt")
+        
+        # Ensure we're using absolute paths
+        output_dir = os.path.join(self.base_dir, "outputs")
+        os.makedirs(output_dir, exist_ok=True)
+        output_file = os.path.join(output_dir, f"hashcat_{job_id}.txt")
+        
+        # Store the full paths in variables for the run_job function
+        hash_file_abs = os.path.abspath(hash_file)
+        wordlist_abs = os.path.abspath(wordlist)
         
         # Create job record
         job = {
             "id": job_id,
             "status": "starting",
             "hash_file": os.path.basename(hash_file),
+            "hash_file_path": hash_file_abs,  # Store full path for easier reference
             "wordlist": os.path.basename(wordlist),
+            "wordlist_path": wordlist_abs,    # Store full path for easier reference
             "hash_mode": hash_mode,
             "attack_mode": attack_mode,
             "options": options,
@@ -81,6 +104,11 @@ class HashcatJobRunner:
         # Detect platform for terminal command choice
         is_windows = platform.system().lower() == "windows"
         
+        # Use absolute paths for files
+        hash_file_abs = os.path.abspath(hash_file)
+        wordlist_abs = os.path.abspath(wordlist)
+        output_file_abs = os.path.abspath(output_file)
+        
         # Construct hashcat command
         base_cmd = "hashcat"
         # Add status output to ensure we get more info about progress
@@ -88,29 +116,45 @@ class HashcatJobRunner:
         
         if is_windows:
             # For Windows, use direct command with better output
-            cmd = f'{base_cmd} {hashcat_options} "{hash_file}" "{wordlist}" -o "{output_file}" {options}'
+            cmd = f'{base_cmd} {hashcat_options} "{hash_file_abs}" "{wordlist_abs}" -o "{output_file_abs}" {options}'
             shell = True
         else:
-            # For Linux/Mac, try to use tmux if available
+            # For Linux/Mac, try different approaches
             session_name = f"hashcat_{job_id}"
-            hashcat_cmd = f'{base_cmd} {hashcat_options} "{hash_file}" "{wordlist}" -o "{output_file}" {options}'
+            hashcat_cmd = f'{base_cmd} {hashcat_options} "{hash_file_abs}" "{wordlist_abs}" -o "{output_file_abs}" {options}'
             
-            # Check if tmux is installed
+            # Try multiple background execution methods in order of preference
+            # First check if tmux is available
+            tmux_available = False
+            screen_available = False
+            
             try:
-                tmux_check = subprocess.run(["which", "tmux"], capture_output=True, text=True)
+                # Check for tmux
+                tmux_check = subprocess.run(["which", "tmux"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                 tmux_available = tmux_check.returncode == 0
-            except:
-                tmux_available = False
                 
+                # Check for screen if tmux is not available
+                if not tmux_available:
+                    screen_check = subprocess.run(["which", "screen"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    screen_available = screen_check.returncode == 0
+            except Exception as e:
+                print(f"Error checking for tmux/screen: {str(e)}")
+                tmux_available = False
+                screen_available = False
+            
+            # Choose execution method based on availability
             if tmux_available:
                 # Use tmux if available
-                cmd_args = [
-                    "tmux", "new-session", "-d", "-s", session_name, hashcat_cmd
-                ]
-                cmd = " ".join(cmd_args)
+                cmd = f"tmux new-session -d -s {session_name} '{hashcat_cmd}'"
+                print(f"Using tmux for background execution: {cmd}")
+            elif screen_available:
+                # Use screen as fallback
+                cmd = f"screen -dm -S {session_name} bash -c '{hashcat_cmd}'"
+                print(f"Using screen for background execution: {cmd}")
             else:
-                # If tmux is not available, run directly with nohup (to keep running in background)
-                cmd = f'nohup {base_cmd} {hashcat_options} "{hash_file}" "{wordlist}" -o "{output_file}" {options} > /dev/null 2>&1 &'
+                # Last resort: use background execution with nohup
+                cmd = f"nohup {hashcat_cmd} > {output_file_abs}.log 2>&1 &"
+                print(f"Using nohup for background execution: {cmd}")
             
             shell = True
         
@@ -142,31 +186,53 @@ class HashcatJobRunner:
                 
                 exit_code = process.returncode
             else:
-                # For Linux/Mac, execute the command (tmux or nohup)
-                process = subprocess.run(cmd, shell=shell)
-                exit_code = process.returncode
-                
-                # If using tmux, try to extract output from the session
-                if "tmux" in cmd and tmux_available:
-                    try:
-                        # Wait a moment for the session to be established
-                        time.sleep(2)
-                        
-                        # Capture output from tmux if possible
-                        tmux_output = subprocess.run(
-                            ["tmux", "capture-pane", "-p", "-t", session_name],
-                            capture_output=True, text=True
-                        )
-                        existing_content = tmux_output.stdout if tmux_output.returncode == 0 else ""
-                    except:
-                        existing_content = "Could not capture tmux session output"
-                else:
-                    # For direct execution with nohup, check if output file exists
-                    if os.path.exists(output_file):
-                        with open(output_file, "r") as f:
-                            existing_content = f.read()
+                # For Linux/Mac, execute the command (tmux, screen, or nohup)
+                try:
+                    print(f"Executing command: {cmd}")
+                    process = subprocess.run(cmd, shell=shell, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                    exit_code = process.returncode
+                    
+                    # Capture any immediate output
+                    cmd_output = f"STDOUT: {process.stdout}\n\nSTDERR: {process.stderr}"
+                    print(f"Command execution result: code={exit_code}, output_length={len(cmd_output)}")
+                    
+                    # Wait for hashcat to start
+                    time.sleep(3)
+                    
+                    # Try different methods to capture output based on what method was used
+                    if tmux_available and "tmux" in cmd:
+                        try:
+                            # Try to capture output from tmux session
+                            print(f"Attempting to capture output from tmux session: {session_name}")
+                            tmux_output = subprocess.run(
+                                ["tmux", "capture-pane", "-p", "-t", session_name],
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+                            )
+                            if tmux_output.returncode == 0 and tmux_output.stdout:
+                                existing_content = tmux_output.stdout
+                            else:
+                                existing_content = f"Tmux session started but output capture failed.\n{cmd_output}"
+                        except Exception as e:
+                            print(f"Error capturing tmux output: {str(e)}")
+                            existing_content = f"Error capturing tmux output: {str(e)}\n{cmd_output}"
+                    elif screen_available and "screen" in cmd:
+                        existing_content = f"Screen session started with ID: {session_name}.\n{cmd_output}"
                     else:
-                        existing_content = "Running in background with nohup - output will be saved directly to the output file"
+                        # For nohup, check if the log file exists
+                        log_file = f"{output_file}.log"
+                        if os.path.exists(log_file):
+                            try:
+                                with open(log_file, "r") as f:
+                                    log_content = f.read()
+                                existing_content = f"Background process started. Current log:\n{log_content}"
+                            except Exception as e:
+                                existing_content = f"Background process started but couldn't read log: {str(e)}\n{cmd_output}"
+                        else:
+                            existing_content = f"Background process started. No log file available yet.\n{cmd_output}"
+                except Exception as e:
+                    print(f"Error executing command: {str(e)}")
+                    exit_code = 1
+                    existing_content = f"Error executing command: {str(e)}"
                 
                 # Record the command that was run
                 with open(output_file, "w") as f:
@@ -272,19 +338,43 @@ class HashcatJobRunner:
         del self.jobs[job_id]
         self._save_jobs()
         
-        # Try to kill the tmux session if on Linux/Mac
+        # Try to kill the background process if on Linux/Mac
         if platform.system().lower() != "windows":
             session_name = f"hashcat_{job_id}"
+            
             try:
-                # Try to check if tmux is available first
-                tmux_check = subprocess.run(["which", "tmux"], capture_output=True, text=True)
-                if tmux_check.returncode == 0:
-                    subprocess.run(["tmux", "kill-session", "-t", session_name], check=False)
-                else:
-                    # If tmux is not available, try to kill the process by searching for the job ID in the process list
-                    subprocess.run(f"pkill -f 'hashcat.*{job_id}'", shell=True, check=False)
-            except:
-                # Log the error but continue
-                print(f"Failed to kill session/process for job {job_id}")
+                # Try multiple methods to kill the process
+                print(f"Attempting to terminate job {job_id}")
+                
+                # Try tmux
+                try:
+                    tmux_check = subprocess.run(["which", "tmux"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    if tmux_check.returncode == 0:
+                        print(f"Trying to kill tmux session: {session_name}")
+                        subprocess.run(["tmux", "kill-session", "-t", session_name], 
+                                       stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+                except Exception as e:
+                    print(f"Error killing tmux session: {str(e)}")
+                
+                # Try screen
+                try:
+                    screen_check = subprocess.run(["which", "screen"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    if screen_check.returncode == 0:
+                        print(f"Trying to kill screen session: {session_name}")
+                        subprocess.run(["screen", "-X", "-S", session_name, "quit"], 
+                                       stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+                except Exception as e:
+                    print(f"Error killing screen session: {str(e)}")
+                
+                # Kill by process name/pattern as last resort
+                try:
+                    print(f"Trying to kill process by pattern: hashcat.*{job_id}")
+                    subprocess.run(f"pkill -f 'hashcat.*{job_id}'", shell=True, 
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+                except Exception as e:
+                    print(f"Error killing process by pattern: {str(e)}")
+                    
+            except Exception as e:
+                print(f"Failed to kill session/process for job {job_id}: {str(e)}")
         
         return True

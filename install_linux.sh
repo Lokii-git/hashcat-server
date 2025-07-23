@@ -90,8 +90,23 @@ fi
 # Create necessary directories
 echo -e "${GREEN}[INFO] Creating necessary directories...${NC}"
 mkdir -p ${INSTALL_DIR}/{uploads,hashes,wordlists,outputs,logs}
+
+# Set proper ownership and permissions
+echo -e "${GREEN}[INFO] Setting proper permissions...${NC}"
 chown -R ${USER}:${GROUP} ${INSTALL_DIR}
 chmod -R 755 ${INSTALL_DIR}
+
+# Ensure directories are writable by the service user
+chmod 775 ${INSTALL_DIR}/{uploads,hashes,wordlists,outputs,logs}
+chmod 664 ${INSTALL_DIR}/jobs.json 2>/dev/null || true
+
+# Create empty jobs.json file if it doesn't exist
+if [ ! -f "${INSTALL_DIR}/jobs.json" ]; then
+    echo -e "${GREEN}[INFO] Creating empty jobs.json file...${NC}"
+    echo "{}" > ${INSTALL_DIR}/jobs.json
+    chown ${USER}:${GROUP} ${INSTALL_DIR}/jobs.json
+    chmod 664 ${INSTALL_DIR}/jobs.json
+fi
 
 # Install required Python packages
 echo -e "${GREEN}[INFO] Installing required Python packages...${NC}"
