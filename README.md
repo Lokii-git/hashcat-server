@@ -16,6 +16,7 @@ A secure, web-based interface for running and managing hashcat password cracking
 - **Mobile Friendly**: Responsive design works on desktop and mobile
 - **Organized Storage**: Separate directories for hashes, wordlists, and potfiles
 - **Linux Service Integration**: Run as a systemd service on Linux systems
+- **Reverse Proxy Support**: Easily deploy behind Nginx or Apache with HTTPS
 
 ## Requirements
 
@@ -297,6 +298,38 @@ The server provides the following API endpoints:
 - `GET /api/jobs`: List all jobs
 - `GET /api/jobs/{job_id}`: Get job details
 - `GET /api/jobs/{job_id}/output`: Get job output file
+- `GET /check-auth`: Validate authentication credentials
+
+## Reverse Proxy Setup
+
+You can securely expose Hashcat Server to the internet using a reverse proxy with HTTPS. Example configurations for Nginx and Apache are provided in the `proxy_examples` directory.
+
+### Nginx Configuration
+
+See `proxy_examples/nginx.conf` for a complete example. Key points:
+
+1. Redirect HTTP to HTTPS
+2. Set proper security headers
+3. Forward appropriate proxy headers
+4. Cache static resources
+
+### Apache Configuration
+
+See `proxy_examples/apache.conf` for a complete example. Key points:
+
+1. Enable required Apache modules
+2. Configure SSL certificates
+3. Set up WebSocket support (if needed)
+4. Add security headers
+
+### Common Issues
+
+If you experience authentication issues behind a reverse proxy:
+
+1. Ensure proxy headers are properly forwarded (X-Forwarded-Proto, X-Forwarded-Host)
+2. Set `ROOT_PATH` environment variable if hosting under a subpath
+3. Check for multiple authentication popups (should be fixed in latest version)
+4. Verify default credentials (username: admin, password: password)
 - `DELETE /api/jobs/{job_id}`: Delete a job
 - `DELETE /api/jobs/{job_id}/hash_file`: Delete only the hash file associated with a job
 - `GET /api/files`: List all available hash files and wordlists

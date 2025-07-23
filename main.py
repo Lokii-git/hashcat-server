@@ -9,15 +9,44 @@ from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from fastapi.middleware.gzip import GZipMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 import secrets
 import uvicorn
 from pydantic import BaseModel
 
-from auth import get_current_username
+from auth import get_current_username, initialize_credentials
 from job_runner import HashcatJobRunner
 
+# Initialize credentials on startup to ensure we have valid credentials
+initialize_credentials()
+
+# Custom middleware for handling proxy headers
+class ProxyHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        # Handle X-Forwarded headers from reverse proxy
+        if "x-forwarded-proto" in request.headers:
+            request.scope["scheme"] = request.headers["x-forwarded-proto"]
+        
+        if "x-forwarded-host" in request.headers:
+            request.scope["headers"].append(
+                (b"host", request.headers["x-forwarded-host"].encode())
+            )
+            
+        response = await call_next(request)
+        return response
+
 # Initialize FastAPI
-app = FastAPI(title="Hashcat Server API", description="Remote Hashcat execution server with web UI")
+app = FastAPI(
+    title="Hashcat Server API", 
+    description="Remote Hashcat execution server with web UI",
+    # Ensure proper root path when behind a proxy
+    root_path=os.getenv("ROOT_PATH", "")
+)
+
+# Add middlewares
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+app.add_middleware(ProxyHeadersMiddleware)
 
 # Setup templates and static files
 templates = Jinja2Templates(directory="templates")
@@ -25,6 +54,29 @@ templates = Jinja2Templates(directory="templates")
 # Mount static files without authentication requirement
 # This ensures static resources don't trigger authentication popups
 app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# Define which routes should be public (not require authentication)
+PUBLIC_ROUTES = [
+    "/static", 
+    "/favicon.ico",
+    "/login",
+    # Add any other routes that should be accessible without authentication
+]
+
+# Custom middleware to bypass authentication for public routes
+class AuthenticationBypassMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        # Check if the path is a public route
+        path = request.url.path
+        for public_route in PUBLIC_ROUTES:
+            if path.startswith(public_route):
+                return await call_next(request)
+        
+        # Apply authentication for all other routes
+        return await call_next(request)
+
+# Add authentication bypass middleware
+app.add_middleware(AuthenticationBypassMiddleware)
 
 # Initialize job runner
 job_runner = HashcatJobRunner()
@@ -58,6 +110,11 @@ async def index(request: Request, username: str = Depends(get_current_username))
 async def login_page(request: Request):
     """Render the login page"""
     return templates.TemplateResponse("login.html", {"request": request})
+
+@app.get("/check-auth")
+async def check_auth(username: str = Depends(get_current_username)):
+    """Check if authentication is valid"""
+    return {"authenticated": True, "username": username}
 
 @app.get("/upload", response_class=HTMLResponse)
 async def upload_page(request: Request, username: str = Depends(get_current_username)):

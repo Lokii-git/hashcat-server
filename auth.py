@@ -48,17 +48,32 @@ def initialize_credentials():
     """
     Initialize credentials file if it doesn't exist
     """
-    if not os.path.exists("credentials.json"):
-        creds = {
-            "username": DEFAULT_USERNAME,
-            "password": DEFAULT_PASSWORD
-        }
-        with open("credentials.json", "w") as f:
-            json.dump(creds, f)
-        print(f"Created default credentials: {DEFAULT_USERNAME} / {DEFAULT_PASSWORD}")
-    
-    # Create .env file if it doesn't exist
-    if not os.path.exists(".env"):
-        with open(".env", "w") as f:
-            f.write(f"HASHCAT_USERNAME={DEFAULT_USERNAME}\n")
-            f.write(f"HASHCAT_PASSWORD={DEFAULT_PASSWORD}\n")
+    try:
+        if not os.path.exists("credentials.json"):
+            creds = {
+                "username": DEFAULT_USERNAME,
+                "password": DEFAULT_PASSWORD
+            }
+            with open("credentials.json", "w") as f:
+                json.dump(creds, f)
+            print(f"Created default credentials: {DEFAULT_USERNAME} / {DEFAULT_PASSWORD}")
+        else:
+            # Validate the credentials.json file
+            try:
+                with open("credentials.json", "r") as f:
+                    creds = json.load(f)
+                if "username" not in creds or "password" not in creds:
+                    print("Warning: credentials.json is missing username or password fields!")
+                    print(f"Using default credentials: {DEFAULT_USERNAME} / {DEFAULT_PASSWORD}")
+            except json.JSONDecodeError:
+                print("Warning: credentials.json is not valid JSON!")
+                print(f"Using default credentials: {DEFAULT_USERNAME} / {DEFAULT_PASSWORD}")
+            
+        # Create .env file if it doesn't exist
+        if not os.path.exists(".env"):
+            with open(".env", "w") as f:
+                f.write(f"HASHCAT_USERNAME={DEFAULT_USERNAME}\n")
+                f.write(f"HASHCAT_PASSWORD={DEFAULT_PASSWORD}\n")
+    except Exception as e:
+        print(f"Error initializing credentials: {str(e)}")
+        print(f"Using default credentials: {DEFAULT_USERNAME} / {DEFAULT_PASSWORD}")
