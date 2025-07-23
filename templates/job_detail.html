@@ -32,6 +32,27 @@
 </div>
 
 <div class="grid grid-cols-1 gap-6">
+    <!-- Job Completion Banner - only shown when completed -->
+    <div id="completion-banner" class="content-card p-4 mb-4 text-center {% if not job.status.startswith('completed') %}hidden{% endif %}" 
+         style="{% if job.status == 'completed_exhausted' %}background-color: #FEF3C7; color: #92400E;{% else %}background-color: #D1FAE5; color: #065F46;{% endif %}">
+        <div class="flex items-center justify-center">
+            <svg class="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                {% if job.status == "completed_exhausted" %}
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                {% else %}
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                {% endif %}
+            </svg>
+            <span class="font-bold text-lg">
+                {% if job.status == "completed_exhausted" %}
+                Wordlist Exhausted - No Matches Found
+                {% else %}
+                Job Completed Successfully
+                {% endif %}
+            </span>
+        </div>
+    </div>
+
     <!-- Job Status Summary -->
     <div class="content-card p-6">
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-4">
@@ -39,7 +60,7 @@
                 <div class="flex items-start justify-between">
                     <div>
                         <h3 class="text-secondary-text font-medium mb-1">Status</h3>
-                        <p class="text-xl font-bold status-text" id="job-status">{{ job.status }}</p>
+                        <p class="text-xl font-bold status-text" id="job-status" data-status-display>{{ job.status }}</p>
                     </div>
                     <div class="rounded-full p-2 bg-opacity-20" id="status-icon-bg">
                         <svg class="w-6 h-6" id="status-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -68,7 +89,7 @@
                     <p class="text-xl font-medium" id="completed-at">{{ job.completed_at or 'N/A' }}</p>
                 </div>
                 <div class="mt-2 text-secondary-text text-sm" id="completion-message">
-                    <span>Not yet completed</span>
+                    <span id="completion-text" data-status-display-message>Not yet completed</span>
                 </div>
             </div>
         </div>
@@ -280,9 +301,20 @@
         function updateStatusColor(status) {
             statusText.className = 'text-lg font-bold status-text';
             const statusMsgElement = document.getElementById('job-status-message');
+            const completionText = document.getElementById('completion-text');
+            const completionBanner = document.getElementById('completion-banner');
+            
+            // Normalize status names first for consistency
+            let normalizedStatus = status;
+            let displayStatus = status;
+            
+            if (status === 'completed' || status === 'completed_success' || status === 'completed_exhausted') {
+                normalizedStatus = 'completed';
+                displayStatus = 'Completed';
+            }
             
             // If running status, ensure auto-refresh is enabled
-            if (status === 'running' && !autoRefresh.checked) {
+            if (normalizedStatus === 'running' && !autoRefresh.checked) {
                 autoRefresh.checked = true;
                 // Trigger the change event to start auto-refreshing
                 const event = new Event('change');
@@ -290,7 +322,7 @@
             }
             
             // If completed, ensure we refresh once more to get final output
-            if ((status.startsWith('completed') || status === 'failed' || status === 'error') && 
+            if ((normalizedStatus === 'completed' || normalizedStatus === 'failed' || normalizedStatus === 'error') && 
                 previousStatus === 'running') {
                 // Force one more refresh to get complete output
                 forceRefreshOutput();
@@ -304,35 +336,80 @@
                 }
             }
             
-            // Update status appearance
-            if (status === 'completed') {
+            // Update all status elements in sync
+            if (normalizedStatus === 'completed') {
+                // Set appropriate colors and messages based on completion type
                 statusText.classList.add('text-green-400');
-                statusMsgElement.textContent = 'Job completed successfully';
-            } else if (status === 'completed_success') {
-                statusText.classList.add('text-green-400');
-                statusText.textContent = 'Completed'; // Normalize display name
-                statusMsgElement.textContent = 'Successfully cracked hashes';
-            } else if (status === 'completed_exhausted') {
-                statusText.classList.add('text-yellow-400');
-                statusText.textContent = 'Completed'; // Normalize display name
-                statusMsgElement.textContent = 'Wordlist exhausted, no matches found';
-            } else if (['failed', 'error'].includes(status)) {
+                statusText.textContent = displayStatus;
+                
+                // Show completion banner
+                if (completionBanner) {
+                    completionBanner.classList.remove('hidden');
+                    
+                    // Update banner appearance based on completion type
+                    if (status === 'completed_exhausted') {
+                        completionBanner.style.backgroundColor = '#FEF3C7';
+                        completionBanner.style.color = '#92400E';
+                        completionBanner.querySelector('span').textContent = 'Wordlist Exhausted - No Matches Found';
+                    } else {
+                        completionBanner.style.backgroundColor = '#D1FAE5';
+                        completionBanner.style.color = '#065F46';
+                        completionBanner.querySelector('span').textContent = 'Job Completed Successfully';
+                    }
+                }
+                
+                if (status === 'completed_exhausted') {
+                    statusMsgElement.textContent = 'Wordlist exhausted, no matches found';
+                    if (completionText) completionText.textContent = 'Wordlist exhausted';
+                } else if (status === 'completed_success') {
+                    statusMsgElement.textContent = 'Successfully cracked hashes';
+                    if (completionText) completionText.textContent = 'Successfully cracked hashes';
+                } else {
+                    statusMsgElement.textContent = 'Job completed successfully';
+                    if (completionText) completionText.textContent = 'Process completed';
+                }
+                
+                // Ensure consistent status text across the UI
+                document.querySelectorAll('[data-status-display]').forEach(el => {
+                    el.textContent = displayStatus;
+                });
+                
+            } else if (['failed', 'error'].includes(normalizedStatus)) {
                 statusText.classList.add('text-red-400');
                 statusMsgElement.textContent = 'Job failed or encountered an error';
-            } else if (['starting', 'running'].includes(status)) {
+                statusText.textContent = displayStatus;
+                if (completionText) completionText.textContent = 'Failed to complete';
+                
+                // Hide completion banner
+                if (completionBanner) {
+                    completionBanner.classList.add('hidden');
+                }
+                
+            } else if (['starting', 'running'].includes(normalizedStatus)) {
                 statusText.classList.add('text-blue-400');
-                statusMsgElement.textContent = status === 'starting' ? 'Job is starting up...' : 'Job is actively running';
+                statusMsgElement.textContent = normalizedStatus === 'starting' ? 'Job is starting up...' : 'Job is actively running';
+                statusText.textContent = displayStatus;
+                if (completionText) completionText.textContent = 'Not yet completed';
+                
+                // Hide completion banner
+                if (completionBanner) {
+                    completionBanner.classList.add('hidden');
+                }
+                
             } else {
                 statusText.classList.add('text-gray-400');
                 statusMsgElement.textContent = 'Unknown status';
-            }
-            
-            if (status !== 'completed_success' && status !== 'completed_exhausted') {
-                statusText.textContent = status;
+                statusText.textContent = displayStatus;
+                if (completionText) completionText.textContent = 'Status unknown';
+                
+                // Hide completion banner
+                if (completionBanner) {
+                    completionBanner.classList.add('hidden');
+                }
             }
             
             // Store current status for next comparison
-            previousStatus = status;
+            previousStatus = normalizedStatus;
         }
         
         // Function to refresh job data
@@ -350,6 +427,31 @@
                     // Update dates
                     startedAt.textContent = formatDate(job.started_at);
                     completedAt.textContent = formatDate(job.completed_at);
+                    
+                    // Update runtime display
+                    const runtimeElement = document.getElementById('job-runtime');
+                    if (runtimeElement) {
+                        if (job.status.startsWith('running') || job.status === 'starting') {
+                            runtimeElement.textContent = 'Job in progress...';
+                        } else if (job.completed_at && job.started_at) {
+                            const started = new Date(job.started_at);
+                            const completed = new Date(job.completed_at);
+                            const runtime = Math.round((completed - started) / 1000); // in seconds
+                            if (runtime < 60) {
+                                runtimeElement.textContent = `Completed in ${runtime} seconds`;
+                            } else if (runtime < 3600) {
+                                const minutes = Math.floor(runtime / 60);
+                                const seconds = runtime % 60;
+                                runtimeElement.textContent = `Completed in ${minutes}m ${seconds}s`;
+                            } else {
+                                const hours = Math.floor(runtime / 3600);
+                                const minutes = Math.floor((runtime % 3600) / 60);
+                                runtimeElement.textContent = `Completed in ${hours}h ${minutes}m`;
+                            }
+                        } else {
+                            runtimeElement.textContent = 'Calculating runtime...';
+                        }
+                    }
                     
                     // Update progress if available
                     if (job.total_hashes && job.cracked_count !== undefined) {
@@ -468,10 +570,28 @@
                 });
                 
                 if (response.ok) {
-                    // Update the job data
-                    refreshJob();
+                    // Get the updated job data directly from the response
+                    const data = await response.json();
                     
-                    // Then fetch the updated output
+                    if (data && data.job) {
+                        // Update status with the fresh data
+                        updateStatusColor(data.job.status);
+                        
+                        // Update dates
+                        startedAt.textContent = formatDate(data.job.started_at);
+                        completedAt.textContent = formatDate(data.job.completed_at);
+                        
+                        // Update progress if available
+                        if (data.job.total_hashes && data.job.cracked_count !== undefined) {
+                            progressContainer.classList.remove('hidden');
+                            progressText.textContent = `${data.job.cracked_count} / ${data.job.total_hashes}`;
+                        }
+                    } else {
+                        // Fallback to regular refresh if we didn't get job data back
+                        refreshJob();
+                    }
+                    
+                    // Always fetch the updated output
                     fetchOutput();
                     
                     // Show success message
@@ -492,6 +612,9 @@
                     setTimeout(() => {
                         btnRefresh.innerHTML = 'Refresh';
                     }, 2000);
+                    
+                    // Try regular refresh as fallback
+                    refreshJob();
                 }
             } catch (error) {
                 console.error('Error refreshing job:', error);
@@ -499,6 +622,9 @@
                 setTimeout(() => {
                     btnRefresh.innerHTML = 'Refresh';
                 }, 2000);
+                
+                // Try regular refresh as fallback
+                refreshJob();
             }
         }
         

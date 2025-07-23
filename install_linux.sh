@@ -218,6 +218,32 @@ for dir in uploads hashes wordlists outputs logs potfiles; do
     fi
 done
 
+# Create hashcat cache directories for dictionary cache
+echo -e "${GREEN}[INFO] Setting up hashcat cache directories...${NC}"
+HASHCAT_HOME="/home/hashcat"
+HASHCAT_CACHE="${HASHCAT_HOME}/.cache"
+
+if [ ! -d "$HASHCAT_HOME" ]; then
+    echo -e "${GREEN}[INFO] Creating hashcat home directory at $HASHCAT_HOME...${NC}"
+    mkdir -p $HASHCAT_HOME
+else
+    echo -e "${GREEN}[INFO] Hashcat home directory already exists at $HASHCAT_HOME${NC}"
+fi
+
+if [ ! -d "$HASHCAT_CACHE" ]; then
+    echo -e "${GREEN}[INFO] Creating hashcat cache directory at $HASHCAT_CACHE...${NC}"
+    mkdir -p $HASHCAT_CACHE
+else
+    echo -e "${GREEN}[INFO] Hashcat cache directory already exists at $HASHCAT_CACHE${NC}"
+fi
+
+# Set permissions for hashcat cache directories
+echo -e "${GREEN}[INFO] Setting permissions for hashcat cache directories...${NC}"
+chown -R ${USER}:${GROUP} $HASHCAT_HOME
+chmod -R 777 $HASHCAT_HOME  # Permissive for testing, consider adjusting for production
+
+echo -e "${BLUE}[INFO] Hashcat cache directories have been set up.${NC}"
+
 # Initialize potfile with proper permissions
 POTFILE="${INSTALL_DIR}/potfiles/hashcat.pot"
 echo -e "${GREEN}[INFO] Creating and setting permissions for potfile at ${POTFILE}...${NC}"

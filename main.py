@@ -229,9 +229,35 @@ async def refresh_job(job_id: str, username: str = Depends(get_current_username)
             # Continue anyway, the refresh may still work
     
     success = job_runner.refresh_job_output(job_id)
-    if success:
-        # Get the updated job information
-        updated_job = job_runner.get_job(job_id)
+    
+    # Get the updated job information
+    updated_job = job_runner.get_job(job_id)
+    
+    # Check if the job is actually complete but not marked as such
+    if updated_job and updated_job.get('status') != 'completed':
+        # If the job has output that indicates completion but status isn't updated
+        output_path = os.path.join("outputs", f"hashcat_{job_id}.txt")
+        if os.path.exists(output_path):
+            try:
+                with open(output_path, "r") as f:
+                    content = f.read().lower()
+                    # Check for completion markers in the output
+                    if any(marker in content for marker in [
+                        "session completed", 
+                        "session stopped", 
+                        "finished", 
+                        "exhausted",
+                        "progress.....: 100%",
+                        "hashcat stopped!"
+                    ]):
+                        # Update job status to completed
+                        job_runner.update_job_status(job_id, "completed")
+                        # Get the updated job info again
+                        updated_job = job_runner.get_job(job_id)
+            except Exception as e:
+                print(f"Error reading output file during refresh: {str(e)}")
+    
+    if success or updated_job:
         return {
             "status": "refreshed", 
             "job_id": job_id,

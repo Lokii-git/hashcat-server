@@ -28,6 +28,43 @@ class HashcatJobRunner:
             except PermissionError:
                 print(f"WARNING: Permission denied creating directory: {dir_path}")
                 print(f"The application may not function correctly without write permissions.")
+        
+        # Create hashcat cache directories
+        try:
+            # Create the hashcat home directory
+            hashcat_home = "/home/hashcat"
+            hashcat_cache = "/home/hashcat/.cache"
+            
+            if not os.path.exists(hashcat_home):
+                try:
+                    os.makedirs(hashcat_home, exist_ok=True)
+                    print(f"Created hashcat home directory: {hashcat_home}")
+                except PermissionError:
+                    print(f"WARNING: Permission denied creating directory: {hashcat_home}")
+                    print(f"Dictionary cache may not work correctly. Consider running with sudo or adjusting permissions.")
+            
+            # Create the hashcat cache directory
+            if not os.path.exists(hashcat_cache):
+                try:
+                    os.makedirs(hashcat_cache, exist_ok=True)
+                    print(f"Created hashcat cache directory: {hashcat_cache}")
+                except PermissionError:
+                    print(f"WARNING: Permission denied creating directory: {hashcat_cache}")
+                    print(f"Dictionary cache may not work correctly. Consider running with sudo or adjusting permissions.")
+            
+            # Ensure proper permissions on these directories
+            for directory in [hashcat_home, hashcat_cache]:
+                if os.path.exists(directory):
+                    try:
+                        # Try to set permissions to allow hashcat to write to these directories
+                        os.chmod(directory, 0o777)  # Permissive for testing, adjust for production
+                        print(f"Set permissions on {directory}")
+                    except Exception as e:
+                        print(f"Could not set permissions on {directory}: {str(e)}")
+        
+        except Exception as e:
+            print(f"Error setting up hashcat cache directories: {str(e)}")
+            print("Dictionary cache may not work correctly.")
     
     def _load_jobs(self):
         """Load jobs from file"""
@@ -159,18 +196,21 @@ class HashcatJobRunner:
                 tmux_available = False
                 screen_available = False
             
+            # Set environment variables for hashcat cache
+            env_vars = "env HOME=/home/hashcat XDG_CACHE_HOME=/home/hashcat/.cache"
+            
             # Choose execution method based on availability
             if tmux_available:
                 # Use tmux if available
-                cmd = f"tmux new-session -d -s {session_name} '{hashcat_cmd}'"
+                cmd = f"tmux new-session -d -s {session_name} '{env_vars} {hashcat_cmd}'"
                 print(f"Using tmux for background execution: {cmd}")
             elif screen_available:
                 # Use screen as fallback
-                cmd = f"screen -dm -S {session_name} bash -c '{hashcat_cmd}'"
+                cmd = f"screen -dm -S {session_name} bash -c '{env_vars} {hashcat_cmd}'"
                 print(f"Using screen for background execution: {cmd}")
             else:
                 # Last resort: use background execution with nohup
-                cmd = f"nohup {hashcat_cmd} > {output_file_abs}.log 2>&1 &"
+                cmd = f"nohup {env_vars} {hashcat_cmd} > {output_file_abs}.log 2>&1 &"
                 print(f"Using nohup for background execution: {cmd}")
             
             shell = True
@@ -824,6 +864,24 @@ class HashcatJobRunner:
     def list_jobs(self) -> List[Dict[str, Any]]:
         """List all jobs"""
         return list(self.jobs.values())
+    
+    def update_job_status(self, job_id: str, status: str) -> bool:
+        """Update the status of a job"""
+        if job_id not in self.jobs:
+            return False
+            
+        job = self.jobs[job_id]
+        
+        # Update status
+        job["status"] = status
+        
+        # If status is completed and no completed_at time, set it
+        if status == "completed" and not job.get("completed_at"):
+            job["completed_at"] = datetime.datetime.now().isoformat()
+            
+        # Save jobs
+        self._save_jobs()
+        return True
     
     def refresh_job_output(self, job_id: str) -> bool:
         """Force refresh of job output and status check"""
