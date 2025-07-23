@@ -234,20 +234,78 @@ async def refresh_job(job_id: str, username: str = Depends(get_current_username)
     updated_job = job_runner.get_job(job_id)
     
     # Check if the job is actually complete but not marked as such
-    if updated_job and updated_job.get('status') != 'completed':
-        # If the job has output that indicates completion but status isn't updated
+    if updated_job and not updated_job.get('status').startswith('completed'):
+        # Make sure the job is still running
+        is_job_running = job_runner.is_job_running(job_id)
         output_path = os.path.join("outputs", f"hashcat_{job_id}.txt")
+        
+        # Only process if the output file exists
         if os.path.exists(output_path):
             try:
                 with open(output_path, "r") as f:
                     content = f.read().lower()
-                    # Check for completion markers in the output
-                    if any(marker in content for marker in [
+                    
+                    # Check hashcat status lines
+                    status_found = False
+                    
+                    # First, look for explicit status messages from hashcat
+                    for line in content.split("\n"):
+                        line_lower = line.lower().strip()
+                        if line_lower.startswith("status"):
+                            if "cracked" in line_lower:
+                                # If hashcat explicitly reports "Cracked", mark as success
+                                job_runner.update_job_status(job_id, "completed_success")
+                                updated_job = job_runner.get_job(job_id)
+                                status_found = True
+                                break
+                            elif "exhausted" in line_lower:
+                                # If hashcat explicitly reports "Exhausted", mark as exhausted
+                                job_runner.update_job_status(job_id, "completed_exhausted")
+                                updated_job = job_runner.get_job(job_id)
+                                status_found = True
+                                break
+                    
+                    # If we didn't find an explicit status line, use backup methods
+                    if not status_found:
+                        # Check if the job is explicitly exhausted
+                        if "exhausted" in content or "keyspace exhausted" in content or "approaching final keyspace" in content:
+                            if not is_job_running:
+                                # If job is not running and has exhaustion marker, mark as exhausted
+                                job_runner.update_job_status(job_id, "completed_exhausted")
+                                # Get the updated job info again
+                                updated_job = job_runner.get_job(job_id)
+                    
+                    # Check for cracked hashes
+                    elif any(marker in content for marker in ["all hashes have been recovered", "all hashes found"]):
+                        if not is_job_running:
+                            # If job is not running and all hashes found, mark as success
+                            job_runner.update_job_status(job_id, "completed_success")
+                            # Get the updated job info again
+                            updated_job = job_runner.get_job(job_id)
+                    
+                    # Check for 100% progress indicator (usually means job is complete)
+                    elif not status_found:
+                        for line in content.split("\n"):
+                            line_lower = line.lower().strip()
+                            # Look for progress: 100% lines
+                            if line_lower.startswith("progress") and "100.00%" in line_lower:
+                                # If we see 100% progress but hashcat is not running anymore
+                                if not is_job_running:
+                                    # Check if we see recovered lines that indicate success
+                                    if "recovered.....: 0/" not in content.lower():  # Some hashes recovered
+                                        job_runner.update_job_status(job_id, "completed_success")
+                                    else:  # No hashes recovered - exhausted
+                                        job_runner.update_job_status(job_id, "completed_exhausted")
+                                    # Get the updated job info again
+                                    updated_job = job_runner.get_job(job_id)
+                                    status_found = True
+                                    break
+                    
+                    # Check for other completion markers, but only if the job is not running anymore
+                    elif not status_found and not is_job_running and any(marker in content for marker in [
                         "session completed", 
                         "session stopped", 
-                        "finished", 
-                        "exhausted",
-                        "progress.....: 100%",
+                        "finished",
                         "hashcat stopped!"
                     ]):
                         # Update job status to completed

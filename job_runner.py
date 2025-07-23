@@ -786,38 +786,74 @@ class HashcatJobRunner:
             cracked_found = False
             status = "completed"
             
-            # Check if the wordlist was exhausted
-            if "Exhausted" in content or "Approaching final keyspace" in content:
-                exhaust_check = True
+            # First, look for specific Status line from hashcat
+            status_cracked = False
+            status_exhausted = False
+            
+            # Check for explicit status messages from hashcat
+            for line in content.split("\n"):
+                line_lower = line.lower().strip()
+                if line_lower.startswith("status"):
+                    if "cracked" in line_lower:
+                        status_cracked = True
+                        cracked_found = True
+                        break
+                    elif "exhausted" in line_lower:
+                        status_exhausted = True
+                        exhaust_check = True
+                        break
+            
+            # Backup check if we didn't find explicit status lines
+            if not status_cracked and not status_exhausted:
+                # Check if the wordlist was exhausted - use more specific detection
+                exhaust_phrases = [
+                    "exhausted", 
+                    "keyspace exhausted", 
+                    "approaching final keyspace", 
+                    "dictionary exhausted",
+                    "dictionaries exhausted"
+                ]
+                for phrase in exhaust_phrases:
+                    if phrase in content.lower():
+                        exhaust_check = True
+                        break
             
             # Check for actual cracked hashes in the output (they typically contain ":" character)
-            for line in content.split("\n"):
-                if ":" in line and not line.startswith("#") and not line.startswith("Session") and not line.startswith("Status"):
-                    if line.strip().count(":") >= 3:  # Most hash:password outputs have at least 3 colons
-                        cracked_found = True
-                        cracked_count += 1
+            if not status_cracked:  # Only do this if we didn't already find "Status: Cracked"
+                for line in content.split("\n"):
+                    if ":" in line and not line.startswith("#") and not line.startswith("Session") and not line.startswith("Status"):
+                        if line.strip().count(":") >= 1:  # Most hash:password outputs have at least 1 colon
+                            cracked_found = True
+                            cracked_count += 1
             
             # Parse recovered hashes info from status lines
             for line in content.split("\n"):
-                if "Recovered" in line:
-                    parts = line.split()
-                    if len(parts) >= 3:
-                        try:
-                            cracked = parts[1].split("/")[0]
-                            total = parts[1].split("/")[1]
-                            parsed_cracked = int(cracked)
-                            total_hashes = int(total)
-                            
-                            # Only update if we haven't found actual cracked hashes
-                            # or if the parsed count is higher
-                            if not cracked_found or parsed_cracked > cracked_count:
-                                cracked_count = parsed_cracked
-                                cracked_found = True
-                        except (IndexError, ValueError):
-                            pass
+                if "Recovered" in line and ":" in line:  # Make sure it's the right format
+                    parts = line.split(":")
+                    if len(parts) >= 2:
+                        value_part = parts[1].strip()
+                        if "/" in value_part:
+                            try:
+                                fraction_part = value_part.split()[0]  # Get the first part which should be like "1/1"
+                                cracked = fraction_part.split("/")[0]
+                                total = fraction_part.split("/")[1]
+                                parsed_cracked = int(cracked)
+                                total_hashes = int(total)
+                                
+                                # Only update if we haven't found actual cracked hashes
+                                # or if the parsed count is higher
+                                if not cracked_found or parsed_cracked > cracked_count:
+                                    cracked_count = parsed_cracked
+                                    cracked_found = True
+                                    
+                                # If all hashes are cracked, set status_cracked
+                                if parsed_cracked == total_hashes and total_hashes > 0:
+                                    status_cracked = True
+                            except (IndexError, ValueError):
+                                pass
             
             # Set status based on cracking results
-            if cracked_count > 0:
+            if status_cracked or (cracked_count > 0 and cracked_count == total_hashes and total_hashes > 0):
                 status = "completed_success"
             elif exhaust_check:
                 status = "completed_exhausted"
@@ -875,13 +911,62 @@ class HashcatJobRunner:
         # Update status
         job["status"] = status
         
-        # If status is completed and no completed_at time, set it
-        if status == "completed" and not job.get("completed_at"):
+        # If status starts with 'completed' and no completed_at time, set it
+        if status.startswith("completed") and not job.get("completed_at"):
             job["completed_at"] = datetime.datetime.now().isoformat()
             
         # Save jobs
         self._save_jobs()
         return True
+    
+    def is_job_running(self, job_id: str) -> bool:
+        """Check if a job is still running"""
+        if job_id not in self.jobs:
+            return False
+            
+        job = self.jobs[job_id]
+        session_name = job.get("session_name")
+        session_type = job.get("session_type", "unknown")
+        
+        # If job status is already completed, return False
+        if job.get("status", "").startswith("completed") or job.get("status") == "failed" or job.get("status") == "error":
+            return False
+        
+        # Check using various methods
+        process_running = False
+        
+        if session_name:
+            if session_type == "tmux":
+                try:
+                    tmux_check = subprocess.run(
+                        ["tmux", "has-session", "-t", session_name],
+                        stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False
+                    )
+                    process_running = tmux_check.returncode == 0
+                except Exception:
+                    process_running = False
+            elif session_type == "screen":
+                try:
+                    screen_check = subprocess.run(
+                        ["screen", "-list", session_name],
+                        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=False
+                    )
+                    process_running = session_name in screen_check.stdout
+                except Exception:
+                    process_running = False
+        
+        # Last resort check by pattern
+        if not process_running:
+            try:
+                ps_check = subprocess.run(
+                    ["pgrep", "-f", f"hashcat.*{job_id}"],
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False
+                )
+                process_running = ps_check.returncode == 0
+            except Exception:
+                process_running = False
+        
+        return process_running
     
     def refresh_job_output(self, job_id: str) -> bool:
         """Force refresh of job output and status check"""
