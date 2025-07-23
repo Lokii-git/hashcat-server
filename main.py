@@ -217,9 +217,26 @@ async def refresh_job(job_id: str, username: str = Depends(get_current_username)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     
+    # Before refreshing, ensure any output file exists
+    output_path = os.path.join("outputs", f"hashcat_{job_id}.txt")
+    if not os.path.exists(output_path):
+        # If the output file doesn't exist, create an empty one
+        try:
+            with open(output_path, "w") as f:
+                f.write("HASHCAT COMMAND:\n\nInitializing...\n")
+        except Exception as e:
+            print(f"Error creating output file: {str(e)}")
+            # Continue anyway, the refresh may still work
+    
     success = job_runner.refresh_job_output(job_id)
     if success:
-        return {"status": "refreshed", "job_id": job_id}
+        # Get the updated job information
+        updated_job = job_runner.get_job(job_id)
+        return {
+            "status": "refreshed", 
+            "job_id": job_id,
+            "job": updated_job
+        }
     else:
         raise HTTPException(status_code=500, detail="Failed to refresh job output")
     

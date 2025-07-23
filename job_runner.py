@@ -570,10 +570,51 @@ class HashcatJobRunner:
                 
                 # Check for completion conditions
                 if not process_running:
-                    # Process has ended, mark job as completed
-                    print(f"Process for job {job_id} is no longer running, marking as completed")
-                    self._process_job_completion(job_id, output_file)
-                    break
+                    # Double check that the process is really not running
+                    # Sometimes there can be temporary glitches in process detection
+                    time.sleep(1)  # Wait a moment before second check
+                    
+                    # Try all three methods to detect the process
+                    second_check = False
+                    
+                    # Check by PID again
+                    if pid:
+                        try:
+                            os.kill(int(pid), 0)
+                            second_check = True  # Process exists
+                        except:
+                            pass
+                            
+                    # Check by session name again
+                    if not second_check and session_name:
+                        if session_type == "tmux":
+                            try:
+                                tmux_check = subprocess.run(
+                                    ["tmux", "has-session", "-t", session_name],
+                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False
+                                )
+                                second_check = tmux_check.returncode == 0
+                            except:
+                                pass
+                                
+                    # Last resort check by pattern again
+                    if not second_check:
+                        try:
+                            ps_check = subprocess.run(
+                                ["pgrep", "-f", f"hashcat.*{job_id}"],
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False
+                            )
+                            second_check = ps_check.returncode == 0
+                        except:
+                            pass
+                    
+                    if not second_check:
+                        # Process is definitely not running, mark job as completed
+                        print(f"Process for job {job_id} is confirmed not running, marking as completed")
+                        self._process_job_completion(job_id, output_file)
+                        break
+                    else:
+                        print(f"Process for job {job_id} was detected on second check, continuing monitoring")
                 
                 # Check for job progress indicators in output
                 if latest_output:
@@ -613,25 +654,33 @@ class HashcatJobRunner:
                                 # Extract percentage like "1234567/7654321 (45.67%)"
                                 progress_match = line.split("(")[1].split(")")[0].replace("%", "")
                                 current_progress = float(progress_match)
-                                if current_progress > highest_progress:
-                                    highest_progress = current_progress
-                                    
-                                # Detect near completion to capture final output
-                                if current_progress >= 99.9 and not near_completion:
-                                    print(f"Job {job_id} is at {current_progress}% - preparing for final capture")
-                                    near_completion = True
-                                    near_completion_time = time.time()
+                                
+                                # Skip updating progress if this is just the dictionary cache building
+                                # Dictionary cache usually shows as bytes (X.XX%)
+                                if "Dictionary cache building" in line or "bytes" in line:
+                                    print(f"Detected dictionary cache building for job {job_id}, not updating progress")
+                                else:
+                                    if current_progress > highest_progress:
+                                        highest_progress = current_progress
+                                        
+                                    # Detect near completion to capture final output
+                                    if current_progress >= 99.9 and not near_completion:
+                                        print(f"Job {job_id} is at {current_progress}% - preparing for final capture")
+                                        near_completion = True
+                                        near_completion_time = time.time()
                             except (IndexError, ValueError) as e:
                                 print(f"Error parsing progress: {str(e)}")
                         
                         # Check for exhausted wordlist
                         if "Exhausted" in line or "Approaching final keyspace" in line:
                             exhaust_check = True
-                            # Force final output capture, but wait a few seconds to capture any last output
-                            print(f"Detected exhausted keyspace for job {job_id}")
-                            time.sleep(3)  # Wait a bit to capture any final output
-                            self._process_job_completion(job_id, output_file)
-                            break
+                            # Only consider as completion when progress is high
+                            if highest_progress > 99.0:
+                                # Force final output capture, but wait a few seconds to capture any last output
+                                print(f"Detected exhausted keyspace for job {job_id}")
+                                time.sleep(3)  # Wait a bit to capture any final output
+                                self._process_job_completion(job_id, output_file)
+                                break
                         
                         # Check for finished indicators
                         if "Stopped" in line or "Quit" in line or "Finished" in line or "All hashes" in line:
@@ -783,7 +832,92 @@ class HashcatJobRunner:
             
         job = self.jobs[job_id]
         output_file = job.get("output_file")
+        session_name = job.get("session_name")
+        session_type = job.get("session_type", "unknown")
         
+        # First, check if the job is still running
+        process_running = False
+        
+        # Check using various methods
+        if session_name:
+            if session_type == "tmux":
+                try:
+                    tmux_check = subprocess.run(
+                        ["tmux", "has-session", "-t", session_name],
+                        stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False
+                    )
+                    process_running = tmux_check.returncode == 0
+                except Exception:
+                    process_running = False
+            elif session_type == "screen":
+                try:
+                    screen_check = subprocess.run(
+                        ["screen", "-list", session_name],
+                        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=False
+                    )
+                    process_running = session_name in screen_check.stdout
+                except Exception:
+                    process_running = False
+                    
+        # Last resort check by pattern
+        if not process_running:
+            try:
+                ps_check = subprocess.run(
+                    ["pgrep", "-f", f"hashcat.*{job_id}"],
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False
+                )
+                process_running = ps_check.returncode == 0
+            except Exception:
+                process_running = False
+                
+        # If job is still running and we're in tmux or screen, fetch latest output
+        if process_running and session_name and (session_type == "tmux" or session_type == "screen"):
+            try:
+                latest_output = []
+                
+                if session_type == "tmux":
+                    tmux_output = subprocess.run(
+                        ["tmux", "capture-pane", "-p", "-t", session_name],
+                        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=False
+                    )
+                    if tmux_output.returncode == 0 and tmux_output.stdout:
+                        latest_output = tmux_output.stdout.splitlines()
+                elif session_type == "screen":
+                    screen_file = f"/tmp/screen_{job_id}.txt"
+                    subprocess.run(
+                        ["screen", "-S", session_name, "-X", "hardcopy", screen_file],
+                        stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False
+                    )
+                    if os.path.exists(screen_file):
+                        with open(screen_file, "r") as f:
+                            latest_output = f.read().splitlines()
+                        # Clean up temp file
+                        os.remove(screen_file)
+                
+                if latest_output and output_file:
+                    # Get the current output content
+                    current_output = ""
+                    if os.path.exists(output_file):
+                        with open(output_file, "r") as f:
+                            current_output = f.read()
+                            
+                    # Extract the command part from existing output
+                    cmd_part = ""
+                    for line in current_output.splitlines():
+                        cmd_part += line + "\n"
+                        if line == "":  # Find the first empty line after "HASHCAT COMMAND:"
+                            break
+                            
+                    # Build new output with command part and latest output
+                    new_output = cmd_part + "\n".join(latest_output)
+                    
+                    # Write updated output
+                    with open(output_file, "w") as f:
+                        f.write(new_output)
+            except Exception as e:
+                print(f"Error updating output during refresh: {str(e)}")
+                
+        # Now process the completion to update status
         if output_file and os.path.exists(output_file):
             try:
                 # Force update of job status and output

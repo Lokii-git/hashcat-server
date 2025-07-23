@@ -264,6 +264,9 @@
         const resultsPreview = document.getElementById('results-preview');
         const downloadLink = document.getElementById('download-link');
         
+        // Track previous status to detect changes
+        let previousStatus = '{{ job.status }}';
+        
         // Set download link
         downloadLink.href = `/api/jobs/${jobId}/output`;
         
@@ -278,6 +281,30 @@
             statusText.className = 'text-lg font-bold status-text';
             const statusMsgElement = document.getElementById('job-status-message');
             
+            // If running status, ensure auto-refresh is enabled
+            if (status === 'running' && !autoRefresh.checked) {
+                autoRefresh.checked = true;
+                // Trigger the change event to start auto-refreshing
+                const event = new Event('change');
+                autoRefresh.dispatchEvent(event);
+            }
+            
+            // If completed, ensure we refresh once more to get final output
+            if ((status.startsWith('completed') || status === 'failed' || status === 'error') && 
+                previousStatus === 'running') {
+                // Force one more refresh to get complete output
+                forceRefreshOutput();
+                
+                // Disable auto-refresh if enabled
+                if (autoRefresh.checked) {
+                    autoRefresh.checked = false;
+                    // Trigger the change event to stop auto-refreshing
+                    const event = new Event('change');
+                    autoRefresh.dispatchEvent(event);
+                }
+            }
+            
+            // Update status appearance
             if (status === 'completed') {
                 statusText.classList.add('text-green-400');
                 statusMsgElement.textContent = 'Job completed successfully';
@@ -303,6 +330,9 @@
             if (status !== 'completed_success' && status !== 'completed_exhausted') {
                 statusText.textContent = status;
             }
+            
+            // Store current status for next comparison
+            previousStatus = status;
         }
         
         // Function to refresh job data
@@ -476,7 +506,13 @@
         let refreshInterval;
         autoRefresh.addEventListener('change', () => {
             if (autoRefresh.checked) {
-                refreshInterval = setInterval(refreshJob, 5000);  // Refresh every 5 seconds
+                refreshJob(); // Refresh immediately when turned on
+                refreshInterval = setInterval(() => {
+                    if (autoRefresh.checked) { // Double-check it's still checked
+                        refreshJob();
+                        fetchOutput();
+                    }
+                }, 5000);  // Refresh every 5 seconds
             } else {
                 clearInterval(refreshInterval);
             }
