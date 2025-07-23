@@ -1,6 +1,6 @@
 # Hashcat Server
 
-![Version](https://img.shields.io/badge/version-1.0.0-blue)
+![Version](https://img.shields.io/badge/version-1.1.0-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 A secure, web-based interface for running and managing hashcat password cracking jobs remotely. This project provides a modern UI and API for managing hashcat jobs, uploading hash files and wordlists, and retrieving results.
@@ -8,9 +8,10 @@ A secure, web-based interface for running and managing hashcat password cracking
 ## Features
 
 - **Secure Web Interface**: Access hashcat from any device with a browser
-- **Authentication**: Protect your cracking server with username/password
+- **Authentication**: Protect your cracking server with username/password (improved login flow)
 - **Job Management**: Launch, monitor, and retrieve results from hashcat jobs
 - **File Upload**: Easily upload hash files and wordlists
+- **Security Features**: Automatic or manual hash file deletion after job completion
 - **Mobile Friendly**: Responsive design works on desktop and mobile
 - **Organized Storage**: Separate directories for hashes and wordlists
 - **Linux Service Integration**: Run as a systemd service on Linux systems
@@ -154,6 +155,57 @@ For production use:
 5. Set appropriate file upload limits
 6. Consider changing default credentials
 
+## Security Features
+
+### Hash File Management
+
+The server includes features to securely handle sensitive hash files:
+
+1. **Automatic Hash Deletion**: When creating a job, you can enable the "Auto-Delete Hash File" option to automatically remove the hash file once the job completes (whether successful or not).
+
+2. **Manual Hash Deletion**: You can delete a hash file associated with a job at any time through the job detail page or via API.
+
+3. **Data Segregation**: Hash files are stored separately from wordlists in dedicated directories.
+
+#### Using Hash File Deletion
+
+**Through the Web UI:**
+1. When creating a new job, check the "Auto-Delete Hash File After Completion" option to automatically delete the hash file when the job finishes.
+2. On the job status page, use the "Delete Hash File" button to manually delete the hash file while keeping the job record and results.
+
+**Through the API:**
+1. When creating a job, include `"auto_delete_hash": true` in the request:
+   ```
+   POST /api/run/hashcat
+   {
+     "hash_mode": "0",
+     "attack_mode": "0",
+     "hash_file": "example.txt",
+     "wordlist": "rockyou.txt",
+     "auto_delete_hash": true
+   }
+   ```
+
+2. To manually delete a hash file:
+   ```
+   DELETE /api/jobs/{job_id}/hash_file
+   ```
+
+### Authentication Improvements
+
+- **Streamlined Login Flow**: The authentication system has been improved to eliminate redundant login prompts.
+- **Protected Static Resources**: Static files (CSS, JS) are properly excluded from authentication checks to prevent multiple login prompts.
+
+#### Authentication System
+
+The authentication system now follows these principles:
+
+1. Single login required - no more multiple login prompts when accessing the application
+2. Proper session handling through browser storage
+3. Automatic redirection to the login page when session expires
+4. Static resources (CSS, JS, images) are accessible without authentication to improve user experience
+5. All API endpoints and sensitive routes remain fully protected
+
 ## File Management
 
 The server now organizes files into separate directories:
@@ -213,12 +265,30 @@ The server provides the following API endpoints:
 ### API Routes
 - `POST /api/upload/hashlist`: Upload a hash file
 - `POST /api/upload/wordlist`: Upload a wordlist file
-- `POST /api/run/hashcat`: Launch a hashcat job
+- `POST /api/run/hashcat`: Launch a hashcat job (includes auto_delete_hash option)
 - `GET /api/jobs`: List all jobs
 - `GET /api/jobs/{job_id}`: Get job details
 - `GET /api/jobs/{job_id}/output`: Get job output file
 - `DELETE /api/jobs/{job_id}`: Delete a job
+- `DELETE /api/jobs/{job_id}/hash_file`: Delete only the hash file associated with a job
 - `GET /api/files`: List all available hash files and wordlists
+
+## Version History
+
+### v1.1.0 (July 2025)
+- Added hash file security features:
+  - Option to automatically delete hash files after job completion
+  - Manual deletion of hash files via UI and API
+- Improved authentication flow to prevent multiple login prompts
+- Fixed issues with hashcat output display
+- Enhanced job status tracking
+
+### v1.0.0 (Initial Release)
+- Basic functionality for running hashcat jobs
+- Web interface for job management
+- File upload capabilities
+- Authentication system
+- Linux service integration
 
 ## License
 

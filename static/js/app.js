@@ -58,7 +58,7 @@ const HashcatUI = {
     
     // Authentication setup
     setupAuth: function() {
-        // Skip auth check on the login page
+        // Skip auth check on the login page and for static resources
         if (window.location.pathname === '/login') return;
         
         // Check for auth token in session storage
@@ -69,12 +69,27 @@ const HashcatUI = {
             return;
         }
         
-        // Test if auth token is valid
-        fetch('/api/jobs', {
-            headers: {
-                'Authorization': `Basic ${auth}`
+        // Add Authorization header to all future fetch requests
+        const originalFetch = window.fetch;
+        window.fetch = function(url, options = {}) {
+            // Don't add auth headers for static resources
+            if (url.toString().startsWith('/static/')) {
+                return originalFetch(url, options);
             }
-        })
+            
+            options = options || {};
+            options.headers = options.headers || {};
+            
+            // Only add Authorization if not already present
+            if (!options.headers['Authorization']) {
+                options.headers['Authorization'] = `Basic ${auth}`;
+            }
+            
+            return originalFetch(url, options);
+        };
+        
+        // Test if auth token is valid (use already patched fetch)
+        fetch('/api/jobs')
         .then(response => {
             if (!response.ok) {
                 // Auth failed, redirect to login

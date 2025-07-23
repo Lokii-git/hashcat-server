@@ -86,15 +86,25 @@
         
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div class="card-alt p-4 rounded-lg">
-                <div class="flex items-start">
-                    <div class="mr-3 mt-1 text-primary">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                        </svg>
-                    </div>
-                    <div>
-                        <h4 class="text-primary font-medium mb-1">Hash File</h4>
-                        <p class="text-md font-mono bg-card py-1 px-2 rounded">{{ job.hash_file }}</p>
+                <div class="flex items-start justify-between">
+                    <div class="flex items-start">
+                        <div class="mr-3 mt-1 text-primary">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                            </svg>
+                        </div>
+                        <div>
+                            <h4 class="text-primary font-medium mb-1">Hash File</h4>
+                            <p class="text-md font-mono bg-card py-1 px-2 rounded">{{ job.hash_file }}</p>
+                            <div class="mt-2">
+                                <button id="btn-delete-hash" class="text-xs btn btn-danger flex items-center">
+                                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                    </svg>
+                                    Delete Hash File
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -263,31 +273,42 @@
             return new Date(dateString).toLocaleString();
         }
         
-        // Function to update job status color
+        // Function to update job status color and message
         function updateStatusColor(status) {
             statusText.className = 'text-lg font-bold status-text';
+            const statusMsgElement = document.getElementById('job-status-message');
             
             if (status === 'completed') {
                 statusText.classList.add('text-green-400');
+                statusMsgElement.textContent = 'Job completed successfully';
+            } else if (status === 'completed_success') {
+                statusText.classList.add('text-green-400');
+                statusText.textContent = 'Completed'; // Normalize display name
+                statusMsgElement.textContent = 'Successfully cracked hashes';
+            } else if (status === 'completed_exhausted') {
+                statusText.classList.add('text-yellow-400');
+                statusText.textContent = 'Completed'; // Normalize display name
+                statusMsgElement.textContent = 'Wordlist exhausted, no matches found';
             } else if (['failed', 'error'].includes(status)) {
                 statusText.classList.add('text-red-400');
+                statusMsgElement.textContent = 'Job failed or encountered an error';
             } else if (['starting', 'running'].includes(status)) {
                 statusText.classList.add('text-blue-400');
+                statusMsgElement.textContent = status === 'starting' ? 'Job is starting up...' : 'Job is actively running';
             } else {
                 statusText.classList.add('text-gray-400');
+                statusMsgElement.textContent = 'Unknown status';
             }
             
-            statusText.textContent = status;
+            if (status !== 'completed_success' && status !== 'completed_exhausted') {
+                statusText.textContent = status;
+            }
         }
         
         // Function to refresh job data
         async function refreshJob() {
             try {
-                const response = await fetch(`/api/jobs/${jobId}`, {
-                    headers: {
-                        'Authorization': `Basic ${sessionStorage.getItem('auth')}`
-                    }
-                });
+                const response = await fetch(`/api/jobs/${jobId}`);
                 
                 if (response.ok) {
                     const data = await response.json();
@@ -306,10 +327,8 @@
                         progressText.textContent = `${job.cracked_count} / ${job.total_hashes}`;
                     }
                     
-                    // Check if output is available
-                    if (['completed', 'failed', 'error'].includes(job.status)) {
-                        fetchOutput();
-                    }
+                    // Always fetch output regardless of status - even running jobs may have partial output
+                    fetchOutput();
                 } else {
                     console.error('Error refreshing job data');
                 }
@@ -321,11 +340,7 @@
         // Function to fetch job output
         async function fetchOutput() {
             try {
-                const response = await fetch(`/api/jobs/${jobId}/output`, {
-                    headers: {
-                        'Authorization': `Basic ${sessionStorage.getItem('auth')}`
-                    }
-                });
+                const response = await fetch(`/api/jobs/${jobId}/output`);
                 
                 if (response.ok) {
                     const output = await response.text();
@@ -353,10 +368,7 @@
             if (confirm('Are you sure you want to delete this job?')) {
                 try {
                     const response = await fetch(`/api/jobs/${jobId}`, {
-                        method: 'DELETE',
-                        headers: {
-                            'Authorization': `Basic ${sessionStorage.getItem('auth')}`
-                        }
+                        method: 'DELETE'
                     });
                     
                     if (response.ok) {
@@ -370,6 +382,38 @@
                 }
             }
         });
+        
+        // Handle delete hash file button
+        const btnDeleteHash = document.getElementById('btn-delete-hash');
+        if (btnDeleteHash) {
+            btnDeleteHash.addEventListener('click', async () => {
+                if (confirm('Are you sure you want to delete the hash file? This action cannot be undone and the file will be permanently deleted from disk.')) {
+                try {
+                    const response = await fetch(`/api/jobs/${jobId}/hash_file`, {
+                        method: 'DELETE'
+                    });                        if (response.ok) {
+                            // Show success message
+                            alert('Hash file deleted successfully');
+                            // Disable the button
+                            btnDeleteHash.disabled = true;
+                            btnDeleteHash.classList.add('opacity-50', 'cursor-not-allowed');
+                            btnDeleteHash.innerHTML = `
+                                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                </svg>
+                                Hash File Deleted
+                            `;
+                        } else {
+                            const errorData = await response.json();
+                            alert(`Failed to delete hash file: ${errorData.detail}`);
+                        }
+                    } catch (error) {
+                        console.error('Error deleting hash file:', error);
+                        alert('Error deleting hash file');
+                    }
+                }
+            });
+        }
         
         // Handle refresh button
         btnRefresh.addEventListener('click', () => {
@@ -399,10 +443,8 @@
             progressText.textContent = `{{ job.cracked_count }} / {{ job.total_hashes }}`;
         }
         
-        // Check if output is available
-        if (['completed', 'failed', 'error'].includes('{{ job.status }}')) {
-            fetchOutput();
-        }
+        // Always fetch output regardless of status
+        fetchOutput();
     });
 </script>
 {% endblock %}

@@ -203,6 +203,15 @@
                     <input type="text" id="options" name="options" class="form-input" placeholder="--force --gpu-temp-abort=100">
                     <p class="form-help">Any additional hashcat options</p>
                 </div>
+                
+                <!-- Auto Delete Hash File Option -->
+                <div class="md:col-span-2">
+                    <div class="flex items-center mt-2">
+                        <input type="checkbox" id="auto-delete-hash" class="mr-2 h-4 w-4 rounded text-primary focus:ring-primary">
+                        <label for="auto-delete-hash" class="text-sm">Automatically delete hash file when job completes (for security)</label>
+                    </div>
+                    <p class="form-help ml-6 text-sm">Enable this for sensitive hash files to automatically remove them after the job finishes</p>
+                </div>
             </div>
             
             <!-- Submit Button -->
@@ -352,10 +361,7 @@
             try {
                 const response = await fetch('/api/upload/hashlist', {
                     method: 'POST',
-                    body: formData,
-                    headers: {
-                        'Authorization': `Basic ${sessionStorage.getItem('auth')}`
-                    }
+                    body: formData
                 });
                 
                 if (response.ok) {
@@ -386,10 +392,7 @@
             try {
                 const response = await fetch('/api/upload/wordlist', {
                     method: 'POST',
-                    body: formData,
-                    headers: {
-                        'Authorization': `Basic ${sessionStorage.getItem('auth')}`
-                    }
+                    body: formData
                 });
                 
                 if (response.ok) {
@@ -408,11 +411,7 @@
         // Load uploaded files for selection
         async function loadUploadedFiles() {
             try {
-                const response = await fetch('/api/files', {
-                    headers: {
-                        'Authorization': `Basic ${sessionStorage.getItem('auth')}`
-                    }
-                });
+                const response = await fetch('/api/files');
                 
                 if (response.ok) {
                     const data = await response.json();
@@ -474,6 +473,7 @@
             const hashFile = hashFileSelect.value;
             const wordlist = wordlistSelect.value;
             const options = document.getElementById('options').value;
+            const autoDeleteHash = document.getElementById('auto-delete-hash').checked;
             
             if (!hashFile) {
                 alert('Please select a hash file');
@@ -491,14 +491,12 @@
             formData.append('hash_file', hashFile);
             formData.append('wordlist', wordlist);
             formData.append('options', options);
+            formData.append('auto_delete_hash', autoDeleteHash);
             
             try {
                 const response = await fetch('/api/run/hashcat', {
                     method: 'POST',
-                    body: formData,
-                    headers: {
-                        'Authorization': `Basic ${sessionStorage.getItem('auth')}`
-                    }
+                    body: formData
                 });
                 
                 if (response.ok) {

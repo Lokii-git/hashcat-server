@@ -21,6 +21,9 @@ app = FastAPI(title="Hashcat Server API", description="Remote Hashcat execution 
 
 # Setup templates and static files
 templates = Jinja2Templates(directory="templates")
+
+# Mount static files without authentication requirement
+# This ensures static resources don't trigger authentication popups
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Initialize job runner
@@ -110,6 +113,7 @@ async def run_hashcat(
     hash_file: str = Form(...),
     wordlist: str = Form(...),
     options: str = Form(""),
+    auto_delete_hash: bool = Form(False),
     username: str = Depends(get_current_username)
 ):
     """Launch a hashcat job"""
@@ -121,7 +125,7 @@ async def run_hashcat(
     if not os.path.exists(wordlist_path):
         raise HTTPException(status_code=404, detail="Wordlist not found")
     
-    job_id = job_runner.start_job(hash_mode, attack_mode, hash_file_path, wordlist_path, options)
+    job_id = job_runner.start_job(hash_mode, attack_mode, hash_file_path, wordlist_path, options, auto_delete_hash)
     return {"job_id": job_id, "status": "started"}
 
 @app.get("/api/jobs")
@@ -186,6 +190,32 @@ async def delete_job(job_id: str, username: str = Depends(get_current_username))
     if not success:
         raise HTTPException(status_code=404, detail="Job not found")
     return {"status": "deleted"}
+
+@app.delete("/api/jobs/{job_id}/hash_file")
+async def delete_hash_file(job_id: str, username: str = Depends(get_current_username)):
+    """Delete the hash file associated with a job but keep the job record"""
+    job = job_runner.get_job(job_id)
+    
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    # Get hash file path
+    hash_file_name = job.get("hash_file")
+    if not hash_file_name:
+        raise HTTPException(status_code=404, detail="Hash file not found in job record")
+    
+    hash_file_path = os.path.join("hashes", hash_file_name)
+    
+    # Check if file exists
+    if not os.path.exists(hash_file_path):
+        raise HTTPException(status_code=404, detail="Hash file does not exist on disk")
+    
+    # Delete the file
+    try:
+        os.remove(hash_file_path)
+        return {"status": "deleted", "file": hash_file_name}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete hash file: {str(e)}")
 
 # Main entry point
 if __name__ == "__main__":

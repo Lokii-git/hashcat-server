@@ -152,6 +152,9 @@
     </div>
 
     <script>
+        // Clear any existing auth tokens to prevent login loops
+        sessionStorage.removeItem('auth');
+        
         // Matrix background animation
         document.addEventListener('DOMContentLoaded', function() {
             const matrixBg = document.getElementById('matrix-bg');

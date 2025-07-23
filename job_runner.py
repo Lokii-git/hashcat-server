@@ -40,7 +40,7 @@ class HashcatJobRunner:
         with open(self.jobs_file, "w") as f:
             json.dump(self.jobs, f, indent=2)
     
-    def start_job(self, hash_mode: str, attack_mode: str, hash_file: str, wordlist: str, options: str = "") -> str:
+    def start_job(self, hash_mode: str, attack_mode: str, hash_file: str, wordlist: str, options: str = "", auto_delete_hash: bool = False) -> str:
         """Start a new hashcat job"""
         job_id = str(uuid.uuid4())
         output_file = os.path.join("outputs", f"hashcat_{job_id}.txt")
@@ -58,7 +58,8 @@ class HashcatJobRunner:
             "started_at": datetime.now().isoformat(),
             "completed_at": None,
             "cracked_count": 0,
-            "total_hashes": 0
+            "total_hashes": 0,
+            "auto_delete_hash": auto_delete_hash
         }
         
         # Add job to record
@@ -82,16 +83,19 @@ class HashcatJobRunner:
         
         # Construct hashcat command
         base_cmd = "hashcat"
+        # Add status output to ensure we get more info about progress
+        hashcat_options = f"-m {hash_mode} -a {attack_mode} --status --status-timer=1 --potfile-disable"
+        
         if is_windows:
-            # For Windows, use direct command
-            cmd = f'{base_cmd} -m {hash_mode} -a {attack_mode} "{hash_file}" "{wordlist}" -o "{output_file}" {options}'
+            # For Windows, use direct command with better output
+            cmd = f'{base_cmd} {hashcat_options} "{hash_file}" "{wordlist}" -o "{output_file}" {options}'
             shell = True
         else:
             # For Linux/Mac, use tmux
             session_name = f"hashcat_{job_id}"
+            hashcat_cmd = f'{base_cmd} {hashcat_options} "{hash_file}" "{wordlist}" -o "{output_file}" {options}'
             cmd_args = [
-                "tmux", "new-session", "-d", "-s", session_name,
-                f'{base_cmd} -m {hash_mode} -a {attack_mode} "{hash_file}" "{wordlist}" -o "{output_file}" {options}'
+                "tmux", "new-session", "-d", "-s", session_name, hashcat_cmd
             ]
             cmd = " ".join(cmd_args)
             shell = True
@@ -112,11 +116,14 @@ class HashcatJobRunner:
                 # Wait for completion
                 stdout, stderr = process.communicate()
                 
-                # Write output to file
+                # Write output to file - always keep output regardless of success/failure
                 with open(output_file, "w") as f:
+                    f.write("HASHCAT COMMAND:\n")
+                    f.write(f"{cmd}\n\n")
+                    f.write("STANDARD OUTPUT:\n")
                     f.write(stdout)
                     if stderr:
-                        f.write("\n\nERRORS:\n")
+                        f.write("\n\nSTANDARD ERROR:\n")
                         f.write(stderr)
                 
                 exit_code = process.returncode
@@ -124,33 +131,57 @@ class HashcatJobRunner:
                 # For Linux/Mac, execute the tmux command
                 process = subprocess.run(cmd, shell=shell)
                 exit_code = process.returncode
-            
-            # Update job status based on exit code
-            if exit_code == 0:
-                status = "completed"
-            else:
-                status = "failed"
                 
-            # Parse output to get cracked count (basic implementation)
+                # For tmux sessions, we need to extract output after completion
+                if os.path.exists(output_file):
+                    with open(output_file, "r") as f:
+                        existing_content = f.read()
+                else:
+                    existing_content = ""
+                
+                # Record the command that was run
+                with open(output_file, "w") as f:
+                    f.write("HASHCAT COMMAND:\n")
+                    f.write(f"{cmd}\n\n")
+                    f.write("OUTPUT:\n")
+                    f.write(existing_content)
+            
+            # Parse output to get cracked count (improved implementation)
             cracked_count = 0
             total_hashes = 0
+            exhaust_check = False
+            progress_info = ""
             
             if os.path.exists(output_file):
                 with open(output_file, "r") as f:
                     content = f.read()
-                    # Very simple parsing - would need improvement for real-world use
-                    if "Recovered" in content:
-                        for line in content.split("\n"):
-                            if "Recovered" in line:
-                                parts = line.split()
-                                if len(parts) >= 3:
-                                    try:
-                                        cracked = parts[1].split("/")[0]
-                                        total = parts[1].split("/")[1]
-                                        cracked_count = int(cracked)
-                                        total_hashes = int(total)
-                                    except (IndexError, ValueError):
-                                        pass
+                    # Check if the wordlist was exhausted
+                    if "Exhausted" in content or "Approaching final keyspace" in content:
+                        exhaust_check = True
+                    
+                    # Parse recovered hashes info
+                    for line in content.split("\n"):
+                        if "Recovered" in line:
+                            progress_info = line.strip()
+                            parts = line.split()
+                            if len(parts) >= 3:
+                                try:
+                                    cracked = parts[1].split("/")[0]
+                                    total = parts[1].split("/")[1]
+                                    cracked_count = int(cracked)
+                                    total_hashes = int(total)
+                                except (IndexError, ValueError):
+                                    pass
+            
+            # Set status based on cracking results and exit code
+            if cracked_count > 0:
+                status = "completed_success"
+            elif exhaust_check:
+                status = "completed_exhausted"
+            elif exit_code == 0:
+                status = "completed"
+            else:
+                status = "failed"
             
             # Update job with results
             self._update_job_status(
@@ -160,6 +191,15 @@ class HashcatJobRunner:
                 cracked_count=cracked_count,
                 total_hashes=total_hashes
             )
+            
+            # Auto-delete hash file if enabled
+            if self.jobs[job_id].get("auto_delete_hash", False) and hash_file and os.path.exists(hash_file):
+                try:
+                    os.remove(hash_file)
+                    print(f"Auto-deleted hash file: {hash_file}")
+                    self._update_job_status(job_id, status, hash_file_deleted=True)
+                except Exception as e:
+                    print(f"Failed to auto-delete hash file: {str(e)}")
             
         except Exception as e:
             # Update job status on error

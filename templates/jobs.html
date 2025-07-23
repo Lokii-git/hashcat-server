@@ -99,11 +99,7 @@
         // Function to load and display jobs
         async function loadJobs(filter = 'all') {
             try {
-                const response = await fetch('/api/jobs', {
-                    headers: {
-                        'Authorization': `Basic ${sessionStorage.getItem('auth')}`
-                    }
-                });
+                const response = await fetch('/api/jobs');
                 
                 if (response.ok) {
                     const data = await response.json();
@@ -113,7 +109,7 @@
                     if (filter === 'running') {
                         jobs = jobs.filter(job => ['starting', 'running'].includes(job.status));
                     } else if (filter === 'completed') {
-                        jobs = jobs.filter(job => job.status === 'completed');
+                        jobs = jobs.filter(job => ['completed', 'completed_success', 'completed_exhausted'].includes(job.status));
                     } else if (filter === 'failed') {
                         jobs = jobs.filter(job => ['failed', 'error'].includes(job.status));
                     }
@@ -137,11 +133,24 @@
                             const startedAt = new Date(job.started_at).toLocaleString();
                             const completedAt = job.completed_at ? new Date(job.completed_at).toLocaleString() : '-';
                             
-                            // Determine status color
+                            // Determine status color and display text
                             let statusColor = 'text-gray-400';
-                            if (job.status === 'completed') statusColor = 'text-green-400';
-                            if (['failed', 'error'].includes(job.status)) statusColor = 'text-red-400';
-                            if (['starting', 'running'].includes(job.status)) statusColor = 'text-blue-400';
+                            let displayStatus = job.status;
+                            
+                            if (job.status === 'completed' || job.status === 'completed_success') {
+                                statusColor = 'text-green-400';
+                                if (job.status === 'completed_success') displayStatus = 'completed';
+                            }
+                            else if (job.status === 'completed_exhausted') {
+                                statusColor = 'text-yellow-400';
+                                displayStatus = 'exhausted';
+                            }
+                            else if (['failed', 'error'].includes(job.status)) {
+                                statusColor = 'text-red-400';
+                            }
+                            else if (['starting', 'running'].includes(job.status)) {
+                                statusColor = 'text-blue-400';
+                            }
                             
                             // Calculate progress
                             let progressText = 'N/A';
@@ -156,7 +165,7 @@
                                         <span class="font-mono">${job.id.substring(0, 8)}...</span>
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap text-sm">${formatHashMode(job.hash_mode)}</td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm ${statusColor} font-semibold">${job.status}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm ${statusColor} font-semibold">${displayStatus}</td>
                                     <td class="px-6 py-4 whitespace-nowrap text-sm">${startedAt}</td>
                                     <td class="px-6 py-4 whitespace-nowrap text-sm">${completedAt}</td>
                                     <td class="px-6 py-4 whitespace-nowrap text-sm">${progressText}</td>
@@ -214,10 +223,7 @@
         async function deleteJob(jobId) {
             try {
                 const response = await fetch(`/api/jobs/${jobId}`, {
-                    method: 'DELETE',
-                    headers: {
-                        'Authorization': `Basic ${sessionStorage.getItem('auth')}`
-                    }
+                    method: 'DELETE'
                 });
                 
                 if (response.ok) {
