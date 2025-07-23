@@ -112,8 +112,24 @@ class HashcatJobRunner:
         # Construct hashcat command
         base_cmd = "hashcat"
         # Use potfile for better cache efficiency and configure status output
-        potfile_path = os.path.join(self.base_dir, "potfiles", f"hashcat.pot")
-        hashcat_options = f"-m {hash_mode} -a {attack_mode} --status --status-timer=1 --potfile-path=\"{potfile_path}\""
+        potfile_dir = os.path.join(self.base_dir, "potfiles")
+        potfile_path = os.path.join(potfile_dir, "hashcat.pot")
+        
+        # Ensure potfile directory exists and has proper permissions
+        try:
+            os.makedirs(potfile_dir, exist_ok=True)
+            # Create empty potfile if it doesn't exist
+            if not os.path.exists(potfile_path):
+                with open(potfile_path, 'a'):  # 'a' mode creates file if it doesn't exist
+                    pass
+            # Make sure file is readable and writable
+            os.chmod(potfile_path, 0o666)  # rw-rw-rw- permission
+        except Exception as e:
+            print(f"Warning: Could not prepare potfile: {str(e)}")
+            # Fall back to potfile-disable if we can't manage the potfile
+            hashcat_options = f"-m {hash_mode} -a {attack_mode} --status --status-timer=1 --potfile-disable"
+        else:
+            hashcat_options = f"-m {hash_mode} -a {attack_mode} --status --status-timer=1 --potfile-path=\"{potfile_path}\""
         
         if is_windows:
             # For Windows, use direct command with better output

@@ -199,7 +199,7 @@ echo -e "${GREEN}[INFO] Setting proper permissions...${NC}"
 
 # Only change ownership of specific directories needed by the service
 # This preserves .git directory permissions for the original user
-for dir in uploads hashes wordlists outputs logs; do
+for dir in uploads hashes wordlists outputs logs potfiles; do
     if [ ! -d "${INSTALL_DIR}/${dir}" ]; then
         echo -e "${GREEN}[INFO] Creating directory ${INSTALL_DIR}/${dir}...${NC}"
         mkdir -p ${INSTALL_DIR}/${dir}
@@ -209,8 +209,21 @@ for dir in uploads hashes wordlists outputs logs; do
     
     echo -e "${GREEN}[INFO] Setting ownership for ${INSTALL_DIR}/${dir}...${NC}"
     chown -R ${USER}:${GROUP} ${INSTALL_DIR}/${dir}
-    chmod -R 775 ${INSTALL_DIR}/${dir}
+    # Give extra permissions to potfiles directory to avoid permission issues
+    if [ "${dir}" = "potfiles" ]; then
+        echo -e "${GREEN}[INFO] Setting special permissions for potfiles directory...${NC}"
+        chmod -R 777 ${INSTALL_DIR}/${dir}
+    else
+        chmod -R 775 ${INSTALL_DIR}/${dir}
+    fi
 done
+
+# Initialize potfile with proper permissions
+POTFILE="${INSTALL_DIR}/potfiles/hashcat.pot"
+echo -e "${GREEN}[INFO] Creating and setting permissions for potfile at ${POTFILE}...${NC}"
+touch "${POTFILE}"
+chown ${USER}:${GROUP} "${POTFILE}"
+chmod 666 "${POTFILE}"  # rw-rw-rw- permission
 
 # Set ownership for specific files needed by the service
 for file in main.py job_runner.py auth.py; do
