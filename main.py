@@ -81,7 +81,9 @@ async def job_detail_page(request: Request, job_id: str, username: str = Depends
 @app.post("/api/upload/hashlist")
 async def upload_hashlist(hashlist: UploadFile = File(...), username: str = Depends(get_current_username)):
     """Upload a hash file"""
-    filename = f"{uuid.uuid4()}_{hashlist.filename}"
+    # Use a shorter ID instead of full UUID
+    short_id = str(uuid.uuid4())[:8]  
+    filename = f"{short_id}_{hashlist.filename}"
     file_path = os.path.join("hashes", filename)
     
     try:
@@ -95,7 +97,9 @@ async def upload_hashlist(hashlist: UploadFile = File(...), username: str = Depe
 @app.post("/api/upload/wordlist")
 async def upload_wordlist(wordlist: UploadFile = File(...), username: str = Depends(get_current_username)):
     """Upload a wordlist file"""
-    filename = f"{uuid.uuid4()}_{wordlist.filename}"
+    # Use a shorter ID instead of full UUID
+    short_id = str(uuid.uuid4())[:8]
+    filename = f"{short_id}_{wordlist.filename}"
     file_path = os.path.join("wordlists", filename)
     
     try:

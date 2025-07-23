@@ -12,8 +12,9 @@ A secure, web-based interface for running and managing hashcat password cracking
 - **Job Management**: Launch, monitor, and retrieve results from hashcat jobs
 - **File Upload**: Easily upload hash files and wordlists
 - **Security Features**: Automatic or manual hash file deletion after job completion
+- **Performance Optimization**: Persistent potfile caching for faster cracking of previously seen hashes
 - **Mobile Friendly**: Responsive design works on desktop and mobile
-- **Organized Storage**: Separate directories for hashes and wordlists
+- **Organized Storage**: Separate directories for hashes, wordlists, and potfiles
 - **Linux Service Integration**: Run as a systemd service on Linux systems
 
 ## Requirements
@@ -29,6 +30,7 @@ The application organizes files into specific directories:
 - `/hashes`: Stores uploaded hash files
 - `/wordlists`: Stores uploaded wordlist files
 - `/outputs`: Stores hashcat job output files
+- `/potfiles`: Stores hashcat potfiles for caching cracked passwords (ignored by git)
 - `/uploads`: Legacy directory (for backward compatibility)
 
 ## Installation

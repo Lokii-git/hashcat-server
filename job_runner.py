@@ -21,7 +21,7 @@ class HashcatJobRunner:
         self._load_jobs()
         
         # Create necessary directories with absolute paths
-        for dir_name in ["uploads", "hashes", "wordlists", "outputs"]:
+        for dir_name in ["uploads", "hashes", "wordlists", "outputs", "potfiles"]:
             dir_path = os.path.join(self.base_dir, dir_name)
             try:
                 os.makedirs(dir_path, exist_ok=True)
@@ -111,8 +111,9 @@ class HashcatJobRunner:
         
         # Construct hashcat command
         base_cmd = "hashcat"
-        # Add status output to ensure we get more info about progress
-        hashcat_options = f"-m {hash_mode} -a {attack_mode} --status --status-timer=1 --potfile-disable"
+        # Use potfile for better cache efficiency and configure status output
+        potfile_path = os.path.join(self.base_dir, "potfiles", f"hashcat.pot")
+        hashcat_options = f"-m {hash_mode} -a {attack_mode} --status --status-timer=1 --potfile-path=\"{potfile_path}\""
         
         if is_windows:
             # For Windows, use direct command with better output
