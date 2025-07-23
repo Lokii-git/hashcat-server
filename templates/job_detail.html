@@ -417,8 +417,60 @@
         
         // Handle refresh button
         btnRefresh.addEventListener('click', () => {
-            refreshJob();
+            forceRefreshOutput();
         });
+        
+        // Function to force refresh job output and status
+        async function forceRefreshOutput() {
+            try {
+                // Show loading indicator
+                btnRefresh.innerHTML = `
+                    <svg class="animate-spin -ml-1 mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                    </svg>
+                    Refreshing...
+                `;
+                
+                // Call the refresh endpoint
+                const response = await fetch(`/api/jobs/${jobId}/refresh`, {
+                    method: 'POST'
+                });
+                
+                if (response.ok) {
+                    // Update the job data
+                    refreshJob();
+                    
+                    // Then fetch the updated output
+                    fetchOutput();
+                    
+                    // Show success message
+                    btnRefresh.innerHTML = `
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                        </svg>
+                        Refreshed
+                    `;
+                    
+                    // Reset button after 2 seconds
+                    setTimeout(() => {
+                        btnRefresh.innerHTML = 'Refresh';
+                    }, 2000);
+                } else {
+                    // Show error message
+                    btnRefresh.innerHTML = 'Failed to refresh';
+                    setTimeout(() => {
+                        btnRefresh.innerHTML = 'Refresh';
+                    }, 2000);
+                }
+            } catch (error) {
+                console.error('Error refreshing job:', error);
+                btnRefresh.innerHTML = 'Error';
+                setTimeout(() => {
+                    btnRefresh.innerHTML = 'Refresh';
+                }, 2000);
+            }
+        }
         
         // Handle auto-refresh
         let refreshInterval;

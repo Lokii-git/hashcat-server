@@ -429,11 +429,15 @@ class HashcatJobRunner:
         
         # Initialize monitoring variables
         check_interval = 5  # seconds between checks
-        max_idle_time = 60  # seconds with no output change before checking if process ended
+        max_idle_time = 90  # seconds with no output change before checking if process ended
+        final_check_delay = 10  # seconds to wait after detecting near completion before final check
         last_output_size = -1
         last_output_change = time.time()
         start_time = time.time()
         last_output_content = ""
+        near_completion = False
+        near_completion_time = None
+        highest_progress = 0.0
         
         print(f"Starting monitoring for job {job_id} ({session_type})")
         
@@ -578,6 +582,7 @@ class HashcatJobRunner:
                     total_hashes = 0
                     progress_info = ""
                     exhaust_check = False
+                    current_progress = 0.0
                     
                     for line in latest_output:
                         # Look for recovered hash information
@@ -602,13 +607,44 @@ class HashcatJobRunner:
                                 except (IndexError, ValueError):
                                     pass
                         
+                        # Check for progress percentage
+                        if "Progress" in line:
+                            try:
+                                # Extract percentage like "1234567/7654321 (45.67%)"
+                                progress_match = line.split("(")[1].split(")")[0].replace("%", "")
+                                current_progress = float(progress_match)
+                                if current_progress > highest_progress:
+                                    highest_progress = current_progress
+                                    
+                                # Detect near completion to capture final output
+                                if current_progress >= 99.9 and not near_completion:
+                                    print(f"Job {job_id} is at {current_progress}% - preparing for final capture")
+                                    near_completion = True
+                                    near_completion_time = time.time()
+                            except (IndexError, ValueError) as e:
+                                print(f"Error parsing progress: {str(e)}")
+                        
                         # Check for exhausted wordlist
                         if "Exhausted" in line or "Approaching final keyspace" in line:
                             exhaust_check = True
+                            # Force final output capture, but wait a few seconds to capture any last output
+                            print(f"Detected exhausted keyspace for job {job_id}")
+                            time.sleep(3)  # Wait a bit to capture any final output
+                            self._process_job_completion(job_id, output_file)
+                            break
                         
                         # Check for finished indicators
-                        if "Stopped" in line or "Quit" in line or "Finished" in line:
+                        if "Stopped" in line or "Quit" in line or "Finished" in line or "All hashes" in line:
                             print(f"Detected completion message in output for job {job_id}")
+                            time.sleep(3)  # Wait a bit to capture any final output
+                            self._process_job_completion(job_id, output_file)
+                            break
+                        
+                        # Check for cracked hash indicators - common pattern for cracked hash output
+                        if ":" in line and (line.strip().count(":") >= 3) and not line.startswith("#"):
+                            print(f"Detected potential cracked hash for job {job_id}")
+                            # Give it a little more time to finish output
+                            time.sleep(2)
                             self._process_job_completion(job_id, output_file)
                             break
                 
@@ -619,6 +655,14 @@ class HashcatJobRunner:
                         print(f"No output changes for {max_idle_time}s and process not running, marking job {job_id} as completed")
                         self._process_job_completion(job_id, output_file)
                         break
+                
+                # If near completion, wait for the final output
+                if near_completion and (time.time() - near_completion_time) > final_check_delay:
+                    print(f"Job {job_id} is at {highest_progress}% and {time.time() - near_completion_time:.1f}s has passed since near completion")
+                    print(f"Capturing final output for job {job_id}")
+                    time.sleep(1)  # Give a bit more time for final output
+                    self._process_job_completion(job_id, output_file)
+                    break
                 
                 # Sleep before next check
                 time.sleep(check_interval)
@@ -640,6 +684,9 @@ class HashcatJobRunner:
             return
         
         try:
+            # Wait a moment for any final output to be written
+            time.sleep(2)
+            
             with open(output_file, "r") as f:
                 content = f.read()
             
@@ -647,13 +694,21 @@ class HashcatJobRunner:
             cracked_count = 0
             total_hashes = 0
             exhaust_check = False
+            cracked_found = False
             status = "completed"
             
             # Check if the wordlist was exhausted
             if "Exhausted" in content or "Approaching final keyspace" in content:
                 exhaust_check = True
             
-            # Parse recovered hashes info
+            # Check for actual cracked hashes in the output (they typically contain ":" character)
+            for line in content.split("\n"):
+                if ":" in line and not line.startswith("#") and not line.startswith("Session") and not line.startswith("Status"):
+                    if line.strip().count(":") >= 3:  # Most hash:password outputs have at least 3 colons
+                        cracked_found = True
+                        cracked_count += 1
+            
+            # Parse recovered hashes info from status lines
             for line in content.split("\n"):
                 if "Recovered" in line:
                     parts = line.split()
@@ -661,8 +716,14 @@ class HashcatJobRunner:
                         try:
                             cracked = parts[1].split("/")[0]
                             total = parts[1].split("/")[1]
-                            cracked_count = int(cracked)
+                            parsed_cracked = int(cracked)
                             total_hashes = int(total)
+                            
+                            # Only update if we haven't found actual cracked hashes
+                            # or if the parsed count is higher
+                            if not cracked_found or parsed_cracked > cracked_count:
+                                cracked_count = parsed_cracked
+                                cracked_found = True
                         except (IndexError, ValueError):
                             pass
             
@@ -715,6 +776,24 @@ class HashcatJobRunner:
         """List all jobs"""
         return list(self.jobs.values())
     
+    def refresh_job_output(self, job_id: str) -> bool:
+        """Force refresh of job output and status check"""
+        if job_id not in self.jobs:
+            return False
+            
+        job = self.jobs[job_id]
+        output_file = job.get("output_file")
+        
+        if output_file and os.path.exists(output_file):
+            try:
+                # Force update of job status and output
+                self._process_job_completion(job_id, output_file)
+                return True
+            except Exception as e:
+                print(f"Error refreshing job output: {str(e)}")
+                return False
+        return False
+        
     def delete_job(self, job_id: str) -> bool:
         """Delete a job"""
         if job_id not in self.jobs:

@@ -210,6 +210,19 @@ async def get_job_output(job_id: str, username: str = Depends(get_current_userna
         raise HTTPException(status_code=404, detail="Output file not found")
     return FileResponse(output_path, media_type="text/plain", filename=f"hashcat_{job_id}.txt")
     
+@app.post("/api/jobs/{job_id}/refresh")
+async def refresh_job(job_id: str, username: str = Depends(get_current_username)):
+    """Force refresh of job output and status"""
+    job = job_runner.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    success = job_runner.refresh_job_output(job_id)
+    if success:
+        return {"status": "refreshed", "job_id": job_id}
+    else:
+        raise HTTPException(status_code=500, detail="Failed to refresh job output")
+    
 @app.get("/api/files")
 async def list_uploaded_files(username: str = Depends(get_current_username)):
     """List all files in the hashes and wordlists directories"""

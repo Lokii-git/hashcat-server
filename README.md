@@ -368,7 +368,16 @@ If you encounter permission issues after installation:
 
 ## Version History
 
-### v1.1.0 (July 2025)
+### v1.2.0 (Current)
+- Improved job output monitoring with better completion detection
+- Added support for capturing final output when jobs complete
+- Added force refresh functionality to ensure complete job results
+- Enhanced potfile integration and caching of cracked passwords
+- Fixed bug with missing output at job completion (99.5%+ progress)
+- Better handling of exhausted keyspace detection
+- Added API endpoint to force refresh job output and status
+
+### v1.1.0 (Previous)
 - Added hash file security features:
   - Option to automatically delete hash files after job completion
   - Manual deletion of hash files via UI and API
