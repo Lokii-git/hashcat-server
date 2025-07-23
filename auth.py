@@ -72,8 +72,33 @@ def get_current_username(credentials: HTTPBasicCredentials = Depends(security)) 
     """
     Backwards compatibility function for existing code
     """
-    user = get_current_user(credentials)
-    return user.username
+    db = get_db_session()
+    try:
+        user = db.query(User).filter(User.username == credentials.username).first()
+        if user and user.is_active and user.verify_password(credentials.password):
+            return user.username
+            
+        # Fall back to legacy credential check if needed
+        if os.path.exists("credentials.json"):
+            with open("credentials.json", "r") as f:
+                creds = json.load(f)
+            legacy_username = creds.get("username", DEFAULT_USERNAME)
+            legacy_password = creds.get("password", DEFAULT_PASSWORD)
+        else:
+            legacy_username = DEFAULT_USERNAME
+            legacy_password = DEFAULT_PASSWORD
+            
+        if credentials.username == legacy_username and credentials.password == legacy_password:
+            return legacy_username
+            
+        # Authentication failed
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    finally:
+        db.close()
 
 def get_admin_user(user = Depends(get_current_user)):
     """
