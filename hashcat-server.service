@@ -5,6 +5,7 @@ After=network.target
 [Service]
 Type=simple
 User=hashcat
+Group=hashcat
 WorkingDirectory=/opt/hashcat-server
 ExecStart=/usr/bin/python3 /opt/hashcat-server/main.py
 Restart=on-failure
@@ -12,6 +13,7 @@ RestartSec=5
 StandardOutput=syslog
 StandardError=syslog
 SyslogIdentifier=hashcat-server
+UMask=0002  # More permissive umask to allow group write access
 
 # Security measures (uncomment and adjust as needed)
 # PrivateTmp=true

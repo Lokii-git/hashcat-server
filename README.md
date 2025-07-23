@@ -105,7 +105,15 @@ We provide several scripts to make running the server on Linux easier:
 3. **System Installation**:
    ```bash
    sudo chmod +x install_linux.sh
+   
+   # Standard installation (creates 'hashcat' user)
    sudo ./install_linux.sh
+   
+   # Use current user for running the service (preserves Git functionality)
+   sudo ./install_linux.sh --use-current-user
+   
+   # Specify a custom user and install directory
+   sudo ./install_linux.sh --user myuser --group mygroup --install-dir /path/to/install
    ```
    
    After installation, control the service with:
@@ -114,6 +122,24 @@ We provide several scripts to make running the server on Linux easier:
    sudo systemctl stop hashcat-server
    sudo systemctl status hashcat-server
    ```
+   
+   **Git Compatibility**: If you install in a Git repository directory and plan to use git commands like `git pull` afterwards, use the `--use-current-user` flag to prevent permission issues.
+   
+   **Reinstallation After Updates**: The installer is designed to handle reinstallation intelligently:
+   ```bash
+   # After git pull, simply run the installer again
+   cd /opt/hashcat-server
+   git pull
+   sudo ./install_linux.sh --use-current-user
+   ```
+   
+   The installer will:
+   - Detect it's a reinstallation
+   - Preserve existing files appropriately
+   - Update Python dependencies
+   - Update the service configuration
+   - Restart the service if it was running before
+   - Preserve Git repository permissions
 
 ### Production Deployment
 
@@ -273,6 +299,38 @@ The server provides the following API endpoints:
 - `DELETE /api/jobs/{job_id}/hash_file`: Delete only the hash file associated with a job
 - `GET /api/files`: List all available hash files and wordlists
 
+## Troubleshooting
+
+### Permission Issues
+
+If you encounter permission issues after installation:
+
+1. **Git Operations Failing**: If `git pull` or other Git commands fail with permission errors:
+   ```bash
+   # Fix Git directory permissions
+   sudo chown -R your_username:your_group .git/
+   sudo chmod -R 755 .git/
+   
+   # Or reinstall with your current user
+   sudo ./install_linux.sh --use-current-user
+   ```
+
+2. **Job Execution Errors**: If jobs fail to run due to permission issues:
+   ```bash
+   # Make sure data directories are writable
+   sudo chmod -R 775 /opt/hashcat-server/{uploads,hashes,wordlists,outputs,logs}
+   sudo chmod 664 /opt/hashcat-server/jobs.json
+   ```
+
+3. **Service User Can't Write Files**: Ensure the service user has write access:
+   ```bash
+   # Add your user to the hashcat group
+   sudo usermod -a -G hashcat your_username
+   
+   # Or change directory permissions to be more permissive
+   sudo chmod -R 777 /opt/hashcat-server/{uploads,hashes,wordlists,outputs,logs}
+   ```
+
 ## Version History
 
 ### v1.1.0 (July 2025)
@@ -282,6 +340,8 @@ The server provides the following API endpoints:
 - Improved authentication flow to prevent multiple login prompts
 - Fixed issues with hashcat output display
 - Enhanced job status tracking
+- Added continuous monitoring for background jobs on Linux
+- Improved Linux service installation options to preserve Git functionality
 
 ### v1.0.0 (Initial Release)
 - Basic functionality for running hashcat jobs
