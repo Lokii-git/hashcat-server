@@ -17,8 +17,8 @@ load_dotenv()
 security = HTTPBasic()
 
 # Default credentials from environment variables
-DEFAULT_USERNAME = os.getenv("HASHCAT_USERNAME", "admin")
-DEFAULT_PASSWORD = os.getenv("HASHCAT_PASSWORD", "password")
+DEFAULT_USERNAME = os.getenv("HASHCAT_USERNAME", "Hashes")
+DEFAULT_PASSWORD = os.getenv("HASHCAT_PASSWORD", "PasstheH@SH!")
 
 def get_current_user(credentials: HTTPBasicCredentials = Depends(security)):
     """

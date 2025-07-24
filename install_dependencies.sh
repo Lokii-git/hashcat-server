@@ -2,7 +2,7 @@
 
 # Install required dependencies for hashcat-server admin panel
 echo "Installing required Python packages for hashcat-server admin panel..."
-pip install sqlalchemy passlib[bcrypt] psutil fastapi uvicorn python-multipart
+pip install sqlalchemy passlib[bcrypt] psutil fastapi uvicorn python-multipart --break-system-packages
 
 # Check if installation was successful
 if [ $? -eq 0 ]; then
