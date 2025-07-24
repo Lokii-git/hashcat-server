@@ -60,6 +60,11 @@ PUBLIC_ROUTES = [
     "/static", 
     "/favicon.ico",
     "/login",
+    "/check-auth",  # Allow checking auth status without auth
+    "/api/check-auth", # API version of auth check
+    "/css/", # Any potential CSS files
+    "/js/",  # Any potential JS files
+    "/img/", # Any potential image files
     # Add any other routes that should be accessible without authentication
 ]
 
@@ -70,6 +75,8 @@ class AuthenticationBypassMiddleware(BaseHTTPMiddleware):
         path = request.url.path
         for public_route in PUBLIC_ROUTES:
             if path.startswith(public_route):
+                # For public routes, add a special marker to skip auth in dependencies
+                request.state.skip_auth = True
                 return await call_next(request)
         
         # Apply authentication for all other routes
@@ -109,6 +116,8 @@ async def index(request: Request, username: str = Depends(get_current_username))
 @app.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request):
     """Render the login page"""
+    # Set authentication bypass flag for this route
+    request.state.skip_auth = True
     return templates.TemplateResponse("login.html", {"request": request})
 
 @app.get("/check-auth")
@@ -288,7 +297,7 @@ async def refresh_job(job_id: str, username: str = Depends(get_current_username)
                     # First, look for explicit status messages from hashcat
                     for line in content.split("\n"):
                         line_lower = line.lower().strip()
-                        if line_lower.startswith("status"):
+                        if line_lower.startswith("status") and ":" in line_lower:
                             if "cracked" in line_lower:
                                 # If hashcat explicitly reports "Cracked", mark as success
                                 job_runner.update_job_status(job_id, "completed_success")
@@ -309,6 +318,24 @@ async def refresh_job(job_id: str, username: str = Depends(get_current_username)
                             if not is_job_running:
                                 # If job is not running and has exhaustion marker, mark as exhausted
                                 job_runner.update_job_status(job_id, "completed_exhausted")
+                                # Get the updated job info again
+                                updated_job = job_runner.get_job(job_id)
+                        
+                        # Check for 100% progress as an additional completion indicator
+                        elif not is_job_running:
+                            progress_complete = False
+                            for line in content.split("\n"):
+                                line_lower = line.lower().strip()
+                                if line_lower.startswith("progress") and "100.00%" in line_lower:
+                                    progress_complete = True
+                                    break
+                            
+                            if progress_complete:
+                                # If job shows 100% progress and is not running, mark as completed
+                                if "recovered.....: 0/" not in content.lower():  # Some hashes recovered
+                                    job_runner.update_job_status(job_id, "completed_success")
+                                else:  # No hashes recovered - exhausted
+                                    job_runner.update_job_status(job_id, "completed_exhausted")
                                 # Get the updated job info again
                                 updated_job = job_runner.get_job(job_id)
                     
@@ -343,7 +370,9 @@ async def refresh_job(job_id: str, username: str = Depends(get_current_username)
                         "session completed", 
                         "session stopped", 
                         "finished",
-                        "hashcat stopped!"
+                        "hashcat stopped!",
+                        "[Job Complete]",  # Our custom completion marker
+                        "Waiting 10 seconds to capture final status"  # Our custom delay message
                     ]):
                         # Update job status to completed
                         job_runner.update_job_status(job_id, "completed")

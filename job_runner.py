@@ -237,16 +237,17 @@ class HashcatJobRunner:
             
             # Choose execution method based on availability
             if tmux_available:
-                # Use tmux if available
-                cmd = f"tmux new-session -d -s {session_name} '{env_vars} {hashcat_cmd}'"
+                # Use tmux if available - add a 10 second delay at the end to ensure all output is captured
+                # The sleep command will run after hashcat completes, ensuring the final status messages are captured
+                cmd = f"tmux new-session -d -s {session_name} '{env_vars} {hashcat_cmd}; echo \"\\n[Job Complete] Waiting 10 seconds to capture final status...\"; sleep 10; echo \"[Job Complete] Terminal session closing.\"'"
                 print(f"Using tmux for background execution: {cmd}")
             elif screen_available:
-                # Use screen as fallback
-                cmd = f"screen -dm -S {session_name} bash -c '{env_vars} {hashcat_cmd}'"
+                # Use screen as fallback - add a 10 second delay at the end
+                cmd = f"screen -dm -S {session_name} bash -c '{env_vars} {hashcat_cmd}; echo \"\\n[Job Complete] Waiting 10 seconds to capture final status...\"; sleep 10; echo \"[Job Complete] Terminal session closing.\"'"
                 print(f"Using screen for background execution: {cmd}")
             else:
-                # Last resort: use background execution with nohup
-                cmd = f"nohup {env_vars} {hashcat_cmd} > {output_file_abs}.log 2>&1 &"
+                # Last resort: use background execution with nohup - add a 10 second delay at the end
+                cmd = f"nohup bash -c '{env_vars} {hashcat_cmd}; echo \"\\n[Job Complete] Waiting 10 seconds to capture final status...\"; sleep 10; echo \"[Job Complete] Terminal session closing.\"' > {output_file_abs}.log 2>&1 &"
                 print(f"Using nohup for background execution: {cmd}")
             
             shell = True
@@ -829,11 +830,14 @@ class HashcatJobRunner:
             # Check for explicit status messages from hashcat
             for line in content.split("\n"):
                 line_lower = line.lower().strip()
-                if line_lower.startswith("status"):
+                # More flexible status detection - hashcat uses "Status.....: " with a variable number of dots
+                if line_lower.startswith("status") and (":" in line_lower):
+                    # Check for any form of "Status....: Cracked" with variable dots
                     if "cracked" in line_lower:
                         status_cracked = True
                         cracked_found = True
                         break
+                    # Check for any form of "Status....: Exhausted" with variable dots
                     elif "exhausted" in line_lower:
                         status_exhausted = True
                         exhaust_check = True
@@ -847,12 +851,34 @@ class HashcatJobRunner:
                     "keyspace exhausted", 
                     "approaching final keyspace", 
                     "dictionary exhausted",
-                    "dictionaries exhausted"
+                    "dictionaries exhausted",
+                    "status.*exhausted",  # Regex-like pattern for status lines
+                    "progress.*100%"      # Look for 100% progress as completion indicator
                 ]
+                
+                content_lower = content.lower()
                 for phrase in exhaust_phrases:
-                    if phrase in content.lower():
+                    if phrase.startswith("status.") or phrase.startswith("progress."):
+                        # For special patterns, do a more flexible search
+                        pattern_parts = phrase.split(".")
+                        base_word = pattern_parts[0]
+                        search_term = pattern_parts[1]
+                        
+                        # Search for any line starting with the base word and containing the search term
+                        for line in content_lower.split("\n"):
+                            line = line.strip()
+                            if line.startswith(base_word) and search_term in line:
+                                if base_word == "status" and search_term == "exhausted":
+                                    status_exhausted = True
+                                exhaust_check = True
+                                break
+                    elif phrase in content_lower:
                         exhaust_check = True
                         break
+                        
+                # Also check for completed jobs with 100% progress
+                if "progress" in content_lower and "100%" in content_lower and "stopped" in content_lower:
+                    exhaust_check = True
             
             # Check for actual cracked hashes in the output (they typically contain ":" character)
             if not status_cracked:  # Only do this if we didn't already find "Status: Cracked"
@@ -982,6 +1008,22 @@ class HashcatJobRunner:
         # If job status is already completed, return False
         if job.get("status", "").startswith("completed") or job.get("status") == "failed" or job.get("status") == "error":
             return False
+            
+        # Check if we're in our post-completion waiting period
+        output_file = os.path.join("outputs", f"hashcat_{job_id}.txt")
+        if os.path.exists(output_file):
+            try:
+                with open(output_file, "r") as f:
+                    content = f.read().lower()
+                    if "[job complete] waiting 10 seconds" in content:
+                        print(f"Job {job_id} is in post-completion waiting period, capturing final status")
+                        # We're in the waiting period - refresh the output one more time
+                        self.refresh_job_output(job_id)
+                        # Consider the job as not running so status gets updated
+                        return False
+            except Exception as e:
+                print(f"Error checking for post-completion state: {str(e)}")
+                # Continue with normal checks
         
         # Check using various methods
         process_running = False
@@ -1115,15 +1157,22 @@ class HashcatJobRunner:
         # This is important for jobs that were running and have completed
         if output_file and os.path.exists(output_file):
             try:
+                # Check if we're in post-completion waiting period
+                with open(output_file, "r") as f:
+                    content = f.read()
+                job_complete_waiting = "[Job Complete] Waiting 10 seconds to capture final status" in content
+                    
                 # For jobs that are already marked as completed, we'll still
                 # process the completion to ensure the status is accurate,
-                # but we won't overwrite the completed status
-                if job.get("status", "").startswith("completed") or job.get("status") == "failed" or job.get("status") == "error":
+                # but we won't overwrite the completed status - UNLESS we're in waiting period
+                if not job_complete_waiting and (job.get("status", "").startswith("completed") or 
+                   job.get("status") == "failed" or job.get("status") == "error"):
                     # Just return True, we don't need to process completion again
                     # but this counts as a successful refresh
                     return True
                 
                 # Force update of job status and output for non-completed jobs
+                # or jobs in the waiting period
                 self._process_job_completion(job_id, output_file)
                 return True
             except Exception as e:

@@ -2,7 +2,7 @@ import os
 import json
 from datetime import datetime
 from typing import Optional
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from dotenv import load_dotenv
 from sqlalchemy.orm import Session
@@ -20,10 +20,16 @@ security = HTTPBasic()
 DEFAULT_USERNAME = os.getenv("HASHCAT_USERNAME", "Hashes")
 DEFAULT_PASSWORD = os.getenv("HASHCAT_PASSWORD", "PasstheH@SH!")
 
-def get_current_user(credentials: HTTPBasicCredentials = Depends(security)):
+def get_current_user(credentials: HTTPBasicCredentials = Depends(security), request: Request = None):
     """
     Authenticate user using HTTP Basic Auth and return the User object
+    Skip authentication if request has skip_auth marker
     """
+    # Skip auth for public routes (like /login page)
+    if request and hasattr(request.state, 'skip_auth') and request.state.skip_auth:
+        # Return a dummy user for public routes
+        return None
+        
     db = get_db_session()
     try:
         # Try database authentication first
@@ -68,10 +74,15 @@ def get_current_user(credentials: HTTPBasicCredentials = Depends(security)):
     finally:
         db.close()
 
-def get_current_username(credentials: HTTPBasicCredentials = Depends(security)) -> str:
+def get_current_username(credentials: HTTPBasicCredentials = Depends(security), request: Request = None) -> str:
     """
     Backwards compatibility function for existing code
     """
+    # Skip auth for public routes (like /login page)
+    if request and hasattr(request.state, 'skip_auth') and request.state.skip_auth:
+        # Return a dummy username for public routes
+        return "public"
+        
     db = get_db_session()
     try:
         user = db.query(User).filter(User.username == credentials.username).first()
